@@ -21,21 +21,24 @@ const parser = new XMLParser({
 const PORT = Number(process.env.RECON_API_PORT || 5175);
 const MAX_TARGETS = Number(process.env.RECON_MAX_TARGETS || 24);
 const MAX_ITEMS_PER_TARGET = Number(process.env.RECON_MAX_ITEMS_PER_TARGET || 3);
+const RECON_REQUESTS_PER_MINUTE = Number(process.env.RECON_REQUESTS_PER_MINUTE || 4);
+const RECON_REQUEST_JITTER_MS = Number(process.env.RECON_REQUEST_JITTER_MS || 2500);
+const RECON_REQUEST_INTERVAL_MS = RECON_REQUESTS_PER_MINUTE > 0 ? Math.ceil(60_000 / RECON_REQUESTS_PER_MINUTE) : 0;
 
 const CHANNEL_POLICIES = {
   x: {
     label: "X",
-    min_delay_ms: Number(process.env.X_MIN_DELAY_MS || 18 * 60 * 1000),
-    daily_open_limit: Number(process.env.X_DAILY_OPEN_LIMIT || 12),
-    daily_engagement_limit: Number(process.env.X_DAILY_ENGAGEMENT_LIMIT || 3),
-    mode: "high-value throttle"
+    min_delay_ms: 0,
+    daily_open_limit: Number(process.env.X_DAILY_OPEN_LIMIT || 200),
+    daily_engagement_limit: Number(process.env.X_DAILY_ENGAGEMENT_LIMIT || 50),
+    mode: "receipt log"
   },
   linkedin: {
     label: "LinkedIn",
-    min_delay_ms: Number(process.env.LINKEDIN_MIN_DELAY_MS || 25 * 60 * 1000),
-    daily_open_limit: Number(process.env.LINKEDIN_DAILY_OPEN_LIMIT || 8),
-    daily_engagement_limit: Number(process.env.LINKEDIN_DAILY_ENGAGEMENT_LIMIT || 2),
-    mode: "relationship throttle"
+    min_delay_ms: 0,
+    daily_open_limit: Number(process.env.LINKEDIN_DAILY_OPEN_LIMIT || 120),
+    daily_engagement_limit: Number(process.env.LINKEDIN_DAILY_ENGAGEMENT_LIMIT || 40),
+    mode: "receipt log"
   }
 };
 
@@ -144,6 +147,24 @@ const SEED_FEEDS = {
   "Mozilla Foundation": ["https://foundation.mozilla.org/en/blog/rss/"],
   "RadicalxChange": ["https://www.radicalxchange.org/rss.xml"]
 };
+
+
+let lastReconRequestAt = 0;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function paceReconRequest() {
+  if (!RECON_REQUEST_INTERVAL_MS) return 0;
+  const now = Date.now();
+  const elapsed = now - lastReconRequestAt;
+  const jitter = RECON_REQUEST_JITTER_MS > 0 ? Math.floor(Math.random() * RECON_REQUEST_JITTER_MS) : 0;
+  const waitMs = lastReconRequestAt ? Math.max(0, RECON_REQUEST_INTERVAL_MS - elapsed + jitter) : 0;
+  if (waitMs > 0) await sleep(waitMs);
+  lastReconRequestAt = Date.now();
+  return waitMs;
+}
 
 function clean(value) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
@@ -325,6 +346,7 @@ function probableFeedUrls(url) {
 }
 
 async function fetchText(url, timeoutMs = 4500) {
+  await paceReconRequest();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -605,15 +627,6 @@ app.post("/api/execution/open", async (req, res, next) => {
 
     const log = await readExecutionLog();
     const status = throttleStatus(log.events, channel);
-    if (!status.allowed) {
-      res.status(429).json({
-        error: "channel_throttled",
-        message: `${status.policy.label} is cooling down before the next high-value touch.`,
-        ...status
-      });
-      return;
-    }
-
     const event = {
       id: `${Date.now()}:${channel}:${targetName || url}`,
       type: "open",
@@ -622,7 +635,7 @@ app.post("/api/execution/open", async (req, res, next) => {
       signal_id: signalId,
       url,
       created_at: new Date().toISOString(),
-      note: CHANNEL_POLICIES[channel] ? "human-opened throttled property route" : "human-opened property route"
+      note: CHANNEL_POLICIES[channel] ? "human-opened property route receipt" : "human-opened property route"
     };
     const events = [event, ...log.events].slice(0, 1000);
     await writeExecutionLog({ updated_at: event.created_at, events });
@@ -665,6 +678,7 @@ app.get("/api/recon/fetch", async (req, res, next) => {
       fetched_at: new Date().toISOString(),
       target_count: targets.length,
       signal_count: signals.length,
+      request_rate_per_minute: RECON_REQUESTS_PER_MINUTE,
       appended_count: persistence.appendedCount,
       updated_count: persistence.updatedCount,
       total_saved: persistence.totalSaved,

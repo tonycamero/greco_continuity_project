@@ -127,6 +127,7 @@ type ReconResponse = {
   fetched_at: string;
   target_count: number;
   signal_count: number;
+  request_rate_per_minute?: number;
   signals: FreshSignal[];
   errors: Array<{ target_name: string; errors: string[] }>;
 };
@@ -342,12 +343,12 @@ export function App() {
       const data = await response.json();
       if (!response.ok) {
         const wait = formatDelay(Number(data.wait_ms || 0));
-        setChannelNotice(`${label} is cooling down. Next clear window: ${wait}.`);
+        setChannelNotice(`${label} route was not logged. Try again in ${wait}.`);
         if (data.channel && data.policy) setChannelPolicies((current) => ({ ...current, [data.channel]: data }));
         return;
       }
       if (data.status?.channel) setChannelPolicies((current) => ({ ...current, [data.status.channel]: data.status }));
-      setChannelNotice(`${label} route opened and logged. Keep it surgical.`);
+      setChannelNotice(`${label} route opened and receipt-logged. Keep it surgical.`);
       window.open(url, "_blank", "noopener,noreferrer");
     } catch (error) {
       setChannelNotice(error instanceof Error ? error.message : `${label} route could not be opened.`);
@@ -413,7 +414,7 @@ export function App() {
           <span>
             {freshRecon
               ? `Last fetch: ${new Date(freshRecon.fetched_at).toLocaleString()}`
-              : "RSS, Substack, blogs, podcasts, YouTube-adjacent pages, and public websites first."}
+              : "RSS, Substack, blogs, podcasts, and public websites first. Pacing: 4 requests/min by default."}
           </span>
           {reconError && <em>{reconError}</em>}
         </div>
@@ -682,7 +683,7 @@ export function App() {
                 const value = selected[key];
                 const throttleKey = throttledChannels[key];
                 const policy = throttleKey ? channelPolicies[throttleKey] : null;
-                const meta = policy ? (policy.allowed ? `${policy.daily_open_count}/${policy.policy?.daily_open_limit} today` : `wait ${formatDelay(policy.wait_ms)}`) : "";
+                const meta = policy ? `${policy.daily_open_count} today` : "";
                 return value ? (
                   throttleKey ? (
                     <button key={key} className={`channel-link ${policy && !policy.allowed ? "cooling" : ""}`} onClick={() => openChannelRoute(selected, label, key, value)}>
@@ -706,14 +707,14 @@ export function App() {
             </div>
 
             <div className="throttle-panel">
-              <p className="eyebrow">Property Throttle</p>
+              <p className="eyebrow">Property Log</p>
               <div>
                 <strong>X</strong>
-                <span>{channelPolicies.x ? `${channelPolicies.x.daily_open_count}/${channelPolicies.x.policy?.daily_open_limit} opens today · ${channelPolicies.x.allowed ? "clear" : `cooldown ${formatDelay(channelPolicies.x.wait_ms)}`}` : "policy ready"}</span>
+                <span>{channelPolicies.x ? `${channelPolicies.x.daily_open_count} opens logged today` : "policy ready"}</span>
               </div>
               <div>
                 <strong>LinkedIn</strong>
-                <span>{channelPolicies.linkedin ? `${channelPolicies.linkedin.daily_open_count}/${channelPolicies.linkedin.policy?.daily_open_limit} opens today · ${channelPolicies.linkedin.allowed ? "clear" : `cooldown ${formatDelay(channelPolicies.linkedin.wait_ms)}`}` : "policy ready"}</span>
+                <span>{channelPolicies.linkedin ? `${channelPolicies.linkedin.daily_open_count} opens logged today` : "policy ready"}</span>
               </div>
               {channelNotice && <em>{channelNotice}</em>}
             </div>

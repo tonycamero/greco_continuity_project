@@ -57,23 +57,29 @@ They are also available from:
 The UI intentionally shows only the current fresh queue for now. The saved profile log is kept in the background for later review, engagement history, and follow-up workflows.
 
 
-## X and LinkedIn Property Throttles
+## Reliable Source Fetch Throttle
 
-X and LinkedIn property buttons go through a local pacing gate before opening. This keeps high-value social recon deliberate and logs route opens to:
+The **Fetch Reliable Sources** routine throttles outbound HTTP requests so morning recon does not burst across RSS feeds, blogs, newsletters, and public source discovery.
+
+Default pacing:
+
+- 4 requests/minute
+- up to 2.5 seconds of jitter between paced requests
+
+Tune it when starting the API:
+
+```bash
+RECON_REQUESTS_PER_MINUTE=4 RECON_REQUEST_JITTER_MS=2500 npm run dev
+```
+
+For a more conservative pass, use `RECON_REQUESTS_PER_MINUTE=3`. For a faster pass, use `RECON_REQUESTS_PER_MINUTE=5`.
+
+## X and LinkedIn Property Receipts
+
+X and LinkedIn property buttons are not rate-limited by default. They open normally and log a local route-open receipt to:
 
 ```text
 app/data/execution-log.json
 ```
 
-Default pacing:
-
-- X: 18 minutes between opens, 12 opens/day, 3 engagement receipts/day
-- LinkedIn: 25 minutes between opens, 8 opens/day, 2 engagement receipts/day
-
-You can tune these when starting the API:
-
-```bash
-X_MIN_DELAY_MS=1080000 X_DAILY_OPEN_LIMIT=12 LINKEDIN_MIN_DELAY_MS=1500000 LINKEDIN_DAILY_OPEN_LIMIT=8 npm run dev
-```
-
-The app currently logs human-opened property routes. Like/reply/send behavior should stay human-gated and can be added later as explicit approved execution receipts.
+Like/reply/send behavior should stay human-gated and can be added later as explicit approved execution receipts.
