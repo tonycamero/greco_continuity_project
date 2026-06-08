@@ -8,7 +8,9 @@ import { XMLParser } from "fast-xml-parser";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.resolve(__dirname, "..");
 const csvPath = path.join(appRoot, "public", "data", "greco_relationships_hydrated.csv");
+const signalStorePath = process.env.SIGNAL_STORE_PATH || path.join(appRoot, "data", "profile-signals.json");
 const app = express();
+app.use(express.json({ limit: "1mb" }));
 const parser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: "",
@@ -146,6 +148,63 @@ async function readRelationships() {
   const text = await fs.readFile(csvPath, "utf8");
   const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
   return parsed.data.filter((row) => row.name);
+}
+
+async function readSignalStore() {
+  try {
+    const text = await fs.readFile(signalStorePath, "utf8");
+    const parsed = JSON.parse(text);
+    return { signals: Array.isArray(parsed.signals) ? parsed.signals : [] };
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+    return { signals: [] };
+  }
+}
+
+async function writeSignalStore(store) {
+  await fs.mkdir(path.dirname(signalStorePath), { recursive: true });
+  await fs.writeFile(signalStorePath, `${JSON.stringify(store, null, 2)}\n`, "utf8");
+}
+
+async function appendSignals(signals) {
+  const now = new Date().toISOString();
+  const store = await readSignalStore();
+  const byId = new Map(store.signals.map((signal) => [signal.id, signal]));
+  let appendedCount = 0;
+  let updatedCount = 0;
+
+  for (const signal of signals) {
+    const existing = byId.get(signal.id);
+    if (existing) {
+      byId.set(signal.id, {
+        ...existing,
+        ...signal,
+        first_seen_at: existing.first_seen_at || existing.saved_at || now,
+        last_seen_at: now,
+        seen_count: Number(existing.seen_count || 1) + 1,
+        engagement_status: existing.engagement_status || "new"
+      });
+      updatedCount += 1;
+      continue;
+    }
+    byId.set(signal.id, {
+      ...signal,
+      saved_at: now,
+      first_seen_at: now,
+      last_seen_at: now,
+      seen_count: 1,
+      engagement_status: "new"
+    });
+    appendedCount += 1;
+  }
+
+  const nextSignals = [...byId.values()].sort((a, b) => {
+    const scoreDiff = Number(b.relevance_score || 0) - Number(a.relevance_score || 0);
+    if (scoreDiff !== 0) return scoreDiff;
+    return String(b.last_seen_at || b.saved_at || b.published_at).localeCompare(String(a.last_seen_at || a.saved_at || a.published_at));
+  });
+  await writeSignalStore({ updated_at: now, signals: nextSignals });
+  return { appendedCount, updatedCount, totalSaved: nextSignals.length };
 }
 
 function priorityWeight(row) {
@@ -415,6 +474,21 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true, service: "greco-recon", port: PORT });
 });
 
+app.get("/api/signals", async (req, res, next) => {
+  try {
+    const store = await readSignalStore();
+    const target = clean(req.query.target);
+    const signals = target ? store.signals.filter((signal) => signal.target_name === target) : store.signals;
+    res.json({
+      updated_at: store.updated_at || "",
+      signal_count: signals.length,
+      signals
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get("/api/recon/fetch", async (req, res, next) => {
   try {
     const limit = Math.min(Number(req.query.limit || MAX_TARGETS), 80);
@@ -442,11 +516,15 @@ app.get("/api/recon/fetch", async (req, res, next) => {
       if (scoreDiff !== 0) return scoreDiff;
       return String(b.published_at).localeCompare(String(a.published_at));
     });
+    const persistence = await appendSignals(signals);
 
     res.json({
       fetched_at: new Date().toISOString(),
       target_count: targets.length,
       signal_count: signals.length,
+      appended_count: persistence.appendedCount,
+      updated_count: persistence.updatedCount,
+      total_saved: persistence.totalSaved,
       signals: signals.slice(0, 60),
       errors: errors.slice(0, 20)
     });

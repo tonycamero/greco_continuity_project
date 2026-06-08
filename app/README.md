@@ -40,3 +40,18 @@ This first pass intentionally favors stable public sources:
 - podcast/blog feed surfaces
 
 It does not yet fetch X or LinkedIn. Those should be added later through APIs or browser-assisted recon once the operating rhythm is proven.
+
+Fetched signals are appended to:
+
+```text
+app/data/profile-signals.json
+```
+
+They are also available from:
+
+```text
+/api/signals
+/api/signals?target=Molly%20White
+```
+
+The UI intentionally shows only the current fresh queue for now. The saved profile log is kept in the background for later review, engagement history, and follow-up workflows.
