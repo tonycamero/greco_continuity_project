@@ -23,3 +23,6 @@ build/
 
 __pycache__/
 *.py[cod]
+
+# Local execution receipts
+app/data/execution-log.json

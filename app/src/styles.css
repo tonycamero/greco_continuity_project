@@ -682,6 +682,7 @@ textarea {
 }
 
 .channels a,
+.channel-link,
 .disabled-channel {
   align-items: center;
   border-radius: 8px;
@@ -692,17 +693,82 @@ textarea {
   text-decoration: none;
 }
 
-.channels a {
+.channels a,
+.channel-link {
   background: #eef5ee;
   border: 1px solid #b8d3bd;
   color: #1f5a40;
   font-weight: 800;
 }
 
+.channel-link {
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.channel-link.cooling {
+  background: #fbfaf7;
+  border-color: #d8d4ca;
+  color: #6d5f3f;
+}
+
+.channel-link em {
+  color: #58645d;
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 700;
+  margin-left: auto;
+}
+
 .disabled-channel {
   background: #f6f5f0;
   border: 1px dashed #d8d4ca;
   color: #98a098;
+}
+
+
+.throttle-panel {
+  border-top: 1px solid #ddd9cf;
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+}
+
+.throttle-panel div {
+  align-items: center;
+  background: #f8f7f3;
+  border: 1px solid #e0ddd5;
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  min-height: 40px;
+  padding: 8px 10px;
+}
+
+.throttle-panel strong {
+  color: #172226;
+  font-size: 0.88rem;
+}
+
+.throttle-panel span,
+.throttle-panel em {
+  color: #5c6964;
+  font-size: 0.8rem;
+  font-style: normal;
+  line-height: 1.35;
+  text-align: right;
+}
+
+.throttle-panel em {
+  background: #eef5ee;
+  border: 1px solid #b8d3bd;
+  border-radius: 8px;
+  color: #1f5a40;
+  display: block;
+  padding: 8px 10px;
+  text-align: left;
 }
 
 .followup {

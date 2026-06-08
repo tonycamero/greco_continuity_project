@@ -100,6 +100,29 @@ type FreshSignal = {
   source_url: string;
 };
 
+type ChannelStatus = {
+  channel: string;
+  throttled: boolean;
+  allowed: boolean;
+  wait_ms: number;
+  daily_open_count: number;
+  daily_engagement_count: number;
+  last_open_at?: string;
+  next_open_at?: string;
+  policy: {
+    label: string;
+    min_delay_ms: number;
+    daily_open_limit: number;
+    daily_engagement_limit: number;
+    mode: string;
+  } | null;
+};
+
+type PolicyResponse = {
+  checked_at: string;
+  channels: Record<string, ChannelStatus>;
+};
+
 type ReconResponse = {
   fetched_at: string;
   target_count: number;
@@ -150,6 +173,11 @@ const signalLibrary: Signal[] = [
     angle: "When intelligence becomes abundant, trust and stewardship become the scarce layer."
   }
 ];
+
+const throttledChannels: Record<string, "x" | "linkedin"> = {
+  x_url: "x",
+  linkedin_url: "linkedin"
+};
 
 const platformFields = [
   ["Website", "website", Globe2],
@@ -223,6 +251,15 @@ function channelCount(row: Relationship): number {
   return platformFields.filter(([, key]) => Boolean(row[key])).length;
 }
 
+function formatDelay(ms: number): string {
+  if (ms <= 0) return "clear";
+  const minutes = Math.ceil(ms / 60_000);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return remainder ? `${hours}h ${remainder}m` : `${hours}h`;
+}
+
 export function App() {
   const [relationships, setRelationships] = useState<Relationship[]>([]);
   const [query, setQuery] = useState("");
@@ -233,6 +270,8 @@ export function App() {
   const [freshRecon, setFreshRecon] = useState<ReconResponse | null>(null);
   const [isFetchingRecon, setIsFetchingRecon] = useState(false);
   const [reconError, setReconError] = useState("");
+  const [channelPolicies, setChannelPolicies] = useState<Record<string, ChannelStatus>>({});
+  const [channelNotice, setChannelNotice] = useState("");
   const [mode, setMode] = useState<"Recon" | "Draft" | "Approve">("Recon");
 
   useEffect(() => {
@@ -246,6 +285,21 @@ export function App() {
         setSelectedName(rows[0]?.name ?? "");
       }
     });
+  }, []);
+
+  async function fetchExecutionPolicies() {
+    try {
+      const response = await fetch("/api/execution/policies");
+      if (!response.ok) return;
+      const data = (await response.json()) as PolicyResponse;
+      setChannelPolicies(data.channels);
+    } catch {
+      // Execution pacing is advisory while the local API is unavailable.
+    }
+  }
+
+  useEffect(() => {
+    fetchExecutionPolicies();
   }, []);
 
   const filtered = useMemo(() => {
@@ -265,6 +319,40 @@ export function App() {
     relevantFreshSignals.find((signal) => signal.id === selectedFreshSignalId) ?? relevantFreshSignals[0];
   const topMoves = filtered.slice(0, 5);
   const topFreshSignals = freshRecon?.signals.slice(0, 8) ?? [];
+
+  async function openChannelRoute(row: Relationship, label: string, key: keyof Relationship, url: string) {
+    const channel = throttledChannels[key as string];
+    if (!channel) {
+      window.open(url, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    setChannelNotice("");
+    try {
+      const response = await fetch("/api/execution/open", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          channel,
+          url,
+          target_name: row.name,
+          signal_id: selectedFreshSignal?.id || selectedSignal.id
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        const wait = formatDelay(Number(data.wait_ms || 0));
+        setChannelNotice(`${label} is cooling down. Next clear window: ${wait}.`);
+        if (data.channel && data.policy) setChannelPolicies((current) => ({ ...current, [data.channel]: data }));
+        return;
+      }
+      if (data.status?.channel) setChannelPolicies((current) => ({ ...current, [data.status.channel]: data.status }));
+      setChannelNotice(`${label} route opened and logged. Keep it surgical.`);
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      setChannelNotice(error instanceof Error ? error.message : `${label} route could not be opened.`);
+    }
+  }
 
   async function fetchReliableSources() {
     setIsFetchingRecon(true);
@@ -592,11 +680,22 @@ export function App() {
             <div className="channels">
               {platformFields.map(([label, key, Icon]) => {
                 const value = selected[key];
+                const throttleKey = throttledChannels[key];
+                const policy = throttleKey ? channelPolicies[throttleKey] : null;
+                const meta = policy ? (policy.allowed ? `${policy.daily_open_count}/${policy.policy?.daily_open_limit} today` : `wait ${formatDelay(policy.wait_ms)}`) : "";
                 return value ? (
-                  <a key={key} href={value} target="_blank" rel="noreferrer">
-                    <Icon size={16} />
-                    <span>{label}</span>
-                  </a>
+                  throttleKey ? (
+                    <button key={key} className={`channel-link ${policy && !policy.allowed ? "cooling" : ""}`} onClick={() => openChannelRoute(selected, label, key, value)}>
+                      <Icon size={16} />
+                      <span>{label}</span>
+                      {meta && <em>{meta}</em>}
+                    </button>
+                  ) : (
+                    <a key={key} href={value} target="_blank" rel="noreferrer">
+                      <Icon size={16} />
+                      <span>{label}</span>
+                    </a>
+                  )
                 ) : (
                   <span key={key} className="disabled-channel">
                     <Icon size={16} />
@@ -604,6 +703,19 @@ export function App() {
                   </span>
                 );
               })}
+            </div>
+
+            <div className="throttle-panel">
+              <p className="eyebrow">Property Throttle</p>
+              <div>
+                <strong>X</strong>
+                <span>{channelPolicies.x ? `${channelPolicies.x.daily_open_count}/${channelPolicies.x.policy?.daily_open_limit} opens today · ${channelPolicies.x.allowed ? "clear" : `cooldown ${formatDelay(channelPolicies.x.wait_ms)}`}` : "policy ready"}</span>
+              </div>
+              <div>
+                <strong>LinkedIn</strong>
+                <span>{channelPolicies.linkedin ? `${channelPolicies.linkedin.daily_open_count}/${channelPolicies.linkedin.policy?.daily_open_limit} opens today · ${channelPolicies.linkedin.allowed ? "clear" : `cooldown ${formatDelay(channelPolicies.linkedin.wait_ms)}`}` : "policy ready"}</span>
+              </div>
+              {channelNotice && <em>{channelNotice}</em>}
             </div>
 
             <div className="followup">

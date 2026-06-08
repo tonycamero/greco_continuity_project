@@ -9,6 +9,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.resolve(__dirname, "..");
 const csvPath = path.join(appRoot, "public", "data", "greco_relationships_hydrated.csv");
 const signalStorePath = process.env.SIGNAL_STORE_PATH || path.join(appRoot, "data", "profile-signals.json");
+const executionLogPath = process.env.EXECUTION_LOG_PATH || path.join(appRoot, "data", "execution-log.json");
 const app = express();
 app.use(express.json({ limit: "1mb" }));
 const parser = new XMLParser({
@@ -20,6 +21,23 @@ const parser = new XMLParser({
 const PORT = Number(process.env.RECON_API_PORT || 5175);
 const MAX_TARGETS = Number(process.env.RECON_MAX_TARGETS || 24);
 const MAX_ITEMS_PER_TARGET = Number(process.env.RECON_MAX_ITEMS_PER_TARGET || 3);
+
+const CHANNEL_POLICIES = {
+  x: {
+    label: "X",
+    min_delay_ms: Number(process.env.X_MIN_DELAY_MS || 18 * 60 * 1000),
+    daily_open_limit: Number(process.env.X_DAILY_OPEN_LIMIT || 12),
+    daily_engagement_limit: Number(process.env.X_DAILY_ENGAGEMENT_LIMIT || 3),
+    mode: "high-value throttle"
+  },
+  linkedin: {
+    label: "LinkedIn",
+    min_delay_ms: Number(process.env.LINKEDIN_MIN_DELAY_MS || 25 * 60 * 1000),
+    daily_open_limit: Number(process.env.LINKEDIN_DAILY_OPEN_LIMIT || 8),
+    daily_engagement_limit: Number(process.env.LINKEDIN_DAILY_ENGAGEMENT_LIMIT || 2),
+    mode: "relationship throttle"
+  }
+};
 
 const THEME_KEYWORDS = [
   "ai",
@@ -164,6 +182,76 @@ async function readSignalStore() {
 async function writeSignalStore(store) {
   await fs.mkdir(path.dirname(signalStorePath), { recursive: true });
   await fs.writeFile(signalStorePath, `${JSON.stringify(store, null, 2)}\n`, "utf8");
+}
+
+
+async function readExecutionLog() {
+  try {
+    const text = await fs.readFile(executionLogPath, "utf8");
+    const parsed = JSON.parse(text);
+    return { events: Array.isArray(parsed.events) ? parsed.events : [] };
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+    return { events: [] };
+  }
+}
+
+async function writeExecutionLog(log) {
+  await fs.mkdir(path.dirname(executionLogPath), { recursive: true });
+  await fs.writeFile(executionLogPath, `${JSON.stringify(log, null, 2)}\n`, "utf8");
+}
+
+function channelKey(value) {
+  const normalized = clean(value).toLowerCase();
+  if (normalized === "x" || normalized === "twitter") return "x";
+  if (normalized === "linkedin") return "linkedin";
+  return normalized;
+}
+
+function startOfLocalDay(date = new Date()) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).toISOString();
+}
+
+function throttleStatus(events, channel) {
+  const key = channelKey(channel);
+  const policy = CHANNEL_POLICIES[key];
+  if (!policy) {
+    return {
+      channel: key,
+      throttled: false,
+      allowed: true,
+      wait_ms: 0,
+      daily_open_count: 0,
+      daily_engagement_count: 0,
+      policy: null
+    };
+  }
+
+  const now = Date.now();
+  const today = startOfLocalDay();
+  const channelEvents = events.filter((event) => event.channel === key);
+  const todayEvents = channelEvents.filter((event) => String(event.created_at || "") >= today);
+  const opensToday = todayEvents.filter((event) => event.type === "open").length;
+  const engagementsToday = todayEvents.filter((event) => event.type === "engagement").length;
+  const lastOpen = channelEvents
+    .filter((event) => event.type === "open")
+    .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0];
+  const lastOpenAt = lastOpen?.created_at ? new Date(lastOpen.created_at).valueOf() : 0;
+  const delayWait = lastOpenAt ? Math.max(0, policy.min_delay_ms - (now - lastOpenAt)) : 0;
+  const capWait = opensToday >= policy.daily_open_limit ? Math.max(0, new Date(today).valueOf() + 86_400_000 - now) : 0;
+  const waitMs = Math.max(delayWait, capWait);
+
+  return {
+    channel: key,
+    throttled: true,
+    allowed: waitMs === 0,
+    wait_ms: waitMs,
+    daily_open_count: opensToday,
+    daily_engagement_count: engagementsToday,
+    last_open_at: lastOpen?.created_at || "",
+    next_open_at: waitMs ? new Date(now + waitMs).toISOString() : "",
+    policy
+  };
 }
 
 async function appendSignals(signals) {
@@ -484,6 +572,61 @@ app.get("/api/signals", async (req, res, next) => {
       signal_count: signals.length,
       signals
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+
+app.get("/api/execution/policies", async (_req, res, next) => {
+  try {
+    const log = await readExecutionLog();
+    res.json({
+      checked_at: new Date().toISOString(),
+      channels: Object.fromEntries(
+        Object.keys(CHANNEL_POLICIES).map((channel) => [channel, throttleStatus(log.events, channel)])
+      )
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/execution/open", async (req, res, next) => {
+  try {
+    const channel = channelKey(req.body?.channel);
+    const url = clean(req.body?.url);
+    const targetName = clean(req.body?.target_name);
+    const signalId = clean(req.body?.signal_id);
+    if (!channel || !url) {
+      res.status(400).json({ error: "channel and url are required" });
+      return;
+    }
+
+    const log = await readExecutionLog();
+    const status = throttleStatus(log.events, channel);
+    if (!status.allowed) {
+      res.status(429).json({
+        error: "channel_throttled",
+        message: `${status.policy.label} is cooling down before the next high-value touch.`,
+        ...status
+      });
+      return;
+    }
+
+    const event = {
+      id: `${Date.now()}:${channel}:${targetName || url}`,
+      type: "open",
+      channel,
+      target_name: targetName,
+      signal_id: signalId,
+      url,
+      created_at: new Date().toISOString(),
+      note: CHANNEL_POLICIES[channel] ? "human-opened throttled property route" : "human-opened property route"
+    };
+    const events = [event, ...log.events].slice(0, 1000);
+    await writeExecutionLog({ updated_at: event.created_at, events });
+    res.json({ allowed: true, event, status: throttleStatus(events, channel) });
   } catch (error) {
     next(error);
   }
