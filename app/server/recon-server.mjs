@@ -61,6 +61,49 @@ const THEME_KEYWORDS = [
   "resilience"
 ];
 
+const PROFESSIONAL_LENS = [
+  ["fraud", 28],
+  ["scam", 26],
+  ["scams", 26],
+  ["memecoin", 26],
+  ["token", 18],
+  ["crypto", 24],
+  ["blockchain", 18],
+  ["web3", 18],
+  ["allegations", 16],
+  ["corruption", 24],
+  ["legitimacy", 22],
+  ["trust collapse", 28],
+  ["institutional trust", 26],
+  ["provenance", 24],
+  ["receipt", 18],
+  ["receipts", 18],
+  ["audit", 20],
+  ["authority", 22],
+  ["governed", 18],
+  ["governance", 20],
+  ["identity", 22],
+  ["binding", 18],
+  ["wallet", 18],
+  ["hedera", 22],
+  ["consensus", 18],
+  ["claim", 16],
+  ["claims", 16],
+  ["proof", 18],
+  ["verification", 20],
+  ["platform dependency", 22],
+  ["platform power", 20],
+  ["debanking", 22],
+  ["cbdc", 18],
+  ["ai governance", 22],
+  ["lineage", 22],
+  ["source of truth", 24],
+  ["execution", 14],
+  ["approval", 14],
+  ["social graph", 18],
+  ["creator ownership", 16]
+];
+
 const SEED_FEEDS = {
   "Cory Doctorow / Pluralistic": ["https://pluralistic.net/feed/"],
   "Molly White": ["https://www.citationneeded.news/rss/"],
@@ -84,6 +127,14 @@ const SEED_FEEDS = {
 
 function clean(value) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function termMatches(haystack, term) {
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (/^[a-z0-9]+$/i.test(term) && term.length <= 3) {
+    return new RegExp(`\\b${escaped}\\b`, "i").test(haystack);
+  }
+  return haystack.includes(term);
 }
 
 function arrayify(value) {
@@ -202,13 +253,32 @@ function parseFeed(xml, sourceUrl) {
 
 function relevanceFor(row, item) {
   const haystack = `${item.title} ${item.summary}`.toLowerCase();
-  const matched = THEME_KEYWORDS.filter((keyword) => haystack.includes(keyword));
-  const base = matched.length * 11;
+  const matched = THEME_KEYWORDS.filter((keyword) => termMatches(haystack, keyword));
+  const professionalMatches = PROFESSIONAL_LENS.filter(([keyword]) => termMatches(haystack, keyword));
+  const base = matched.length * 8;
+  const professional = professionalMatches.reduce((sum, [, weight]) => sum + weight, 0);
   const priority = priorityWeight(row) * 6;
+  const segment = clean(row.ecosystem_segment).toLowerCase();
+  const segmentBoost =
+    (segment.includes("crypto") && professionalMatches.some(([keyword]) => ["crypto", "fraud", "scam", "memecoin", "token"].includes(keyword))) ||
+    (segment.includes("trust") && professionalMatches.some(([keyword]) => ["identity", "verification", "governance", "provenance"].includes(keyword)))
+      ? 18
+      : 0;
   const recency = item.published_at
     ? Math.max(0, 20 - Math.floor((Date.now() - new Date(item.published_at).valueOf()) / 86_400_000))
     : 5;
-  return { score: Math.min(100, base + priority + recency), matched_keywords: matched };
+  return {
+    score: Math.min(100, base + professional + priority + segmentBoost + recency),
+    matched_keywords: matched,
+    professional_matches: professionalMatches.map(([keyword]) => keyword),
+    score_components: {
+      category: base,
+      professional,
+      priority,
+      segment: segmentBoost,
+      recency
+    }
+  };
 }
 
 function recommendedAction(row, score) {
@@ -245,21 +315,27 @@ function primaryAngle(row, matched) {
   return row.current_hook || row.first_move || "This may be a contextual signal for trust-mediated exchange.";
 }
 
-function intelligenceSummary(row, item, matched) {
+function intelligenceSummary(row, item, matched, professionalMatches = []) {
   const angle = primaryAngle(row, matched);
-  return `${row.name} has a fresh public signal near ${matched.slice(0, 4).join(", ") || "the project frame"}. ${angle}`;
+  const professionalLens = professionalMatches.length
+    ? ` It also intersects Tony's professional lens: ${professionalMatches.slice(0, 5).join(", ")}.`
+    : "";
+  return `${row.name} has a fresh public signal near ${matched.slice(0, 4).join(", ") || "the project frame"}.${professionalLens} ${angle}`;
 }
 
-function proposedReply(row, item, matched) {
+function proposedReply(row, item, matched, professionalMatches = []) {
   const angle = primaryAngle(row, matched);
+  if (professionalMatches.some((keyword) => ["fraud", "scam", "crypto", "memecoin", "legitimacy", "corruption"].includes(keyword))) {
+    return `This is exactly where trust infrastructure stops being abstract. When legitimacy, fraud risk, and public claims collide, communities need systems that preserve provenance, authority, and accountable exchange instead of just another speculative layer.`;
+  }
   if (row.warm_path_needed === "Yes") {
     return `This feels adjacent to a question I am mapping: how communities coordinate trust, contribution, and exchange without surrendering the relationship layer. ${angle}`;
   }
   return `This is a useful signal. ${angle} I keep coming back to the idea that community without exchange is fragile.`;
 }
 
-function ownedPostSeed(row, item, matched) {
-  const terms = matched.slice(0, 3).join(", ") || "trust, coordination, and exchange";
+function ownedPostSeed(row, item, matched, professionalMatches = []) {
+  const terms = [...professionalMatches, ...matched].slice(0, 4).join(", ") || "trust, coordination, and exchange";
   return `A post worth drafting: ${item.title}. Use it to connect ${terms} to the Regenerative Coordination Economy without pitching the book directly.`;
 }
 
@@ -314,11 +390,13 @@ async function fetchFeedForRelationship(row) {
           summary: item.summary,
           relevance_score: relevance.score,
           matched_keywords: relevance.matched_keywords,
+          professional_matches: relevance.professional_matches,
+          score_components: relevance.score_components,
           recommended_action: recommendedAction(row, relevance.score),
           risk: riskFor(row, relevance.score),
-          intelligence_summary: intelligenceSummary(row, item, relevance.matched_keywords),
-          proposed_reply: proposedReply(row, item, relevance.matched_keywords),
-          owned_post_seed: ownedPostSeed(row, item, relevance.matched_keywords),
+          intelligence_summary: intelligenceSummary(row, item, relevance.matched_keywords, relevance.professional_matches),
+          proposed_reply: proposedReply(row, item, relevance.matched_keywords, relevance.professional_matches),
+          owned_post_seed: ownedPostSeed(row, item, relevance.matched_keywords, relevance.professional_matches),
           follow_up_sequence: followUpSequence(row, relevance.score),
           best_first_channel: row.best_first_channel,
           first_move: row.first_move,

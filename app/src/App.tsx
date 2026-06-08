@@ -81,6 +81,14 @@ type FreshSignal = {
   summary: string;
   relevance_score: number;
   matched_keywords: string[];
+  professional_matches: string[];
+  score_components: {
+    category: number;
+    professional: number;
+    priority: number;
+    segment: number;
+    recency: number;
+  };
   recommended_action: string;
   risk: "Low" | "Medium" | "High";
   intelligence_summary: string;
@@ -187,6 +195,10 @@ function draftFor(row: Relationship, signal: Signal): string {
 function draftForFreshSignal(row: Relationship, signal: FreshSignal): string {
   if (signal.proposed_reply) return signal.proposed_reply;
   const keywords = signal.matched_keywords.length ? signal.matched_keywords.slice(0, 3).join(", ") : "trust and coordination";
+  const professionalTerms = signal.professional_matches?.length ? signal.professional_matches.slice(0, 3).join(", ") : "";
+  if (professionalTerms) {
+    return `This is not a side signal. It intersects ${professionalTerms}, which is close to the work I do around trust infrastructure, provenance, authority, identity, and governed execution. The deeper issue is not just whether this specific event is bad, but what kind of systems make claims accountable before communities are asked to trust them.`;
+  }
   if (row.ecosystem_segment.toLowerCase().includes("creator")) {
     return `This connects with a pattern I keep seeing around ${keywords}: owning the audience is only the first layer. The deeper question is how communities coordinate contribution, trust, and value flow without becoming dependent on the platform layer.`;
   }
@@ -351,21 +363,25 @@ export function App() {
               <div className="morning-queue">
                 <p className="eyebrow">Fresh Signal Queue</p>
                 {topFreshSignals.map((signal) => (
-                  <button
-                    key={signal.id}
-                    className={`queue-row ${selectedFreshSignalId === signal.id ? "selected" : ""}`}
-                    onClick={() => {
-                      setSelectedName(signal.target_name);
-                      setSelectedFreshSignalId(signal.id);
-                      setMode("Recon");
-                    }}
-                  >
-                    <span>
-                      <strong>{signal.target_name}</strong>
-                      <small>{signal.title}</small>
-                    </span>
-                    <em>{signal.relevance_score}</em>
-                  </button>
+                  <div key={signal.id} className={`queue-item ${selectedFreshSignalId === signal.id ? "selected" : ""}`}>
+                    <button
+                      className="queue-row"
+                      onClick={() => {
+                        setSelectedName(signal.target_name);
+                        setSelectedFreshSignalId(signal.id);
+                        setMode("Recon");
+                      }}
+                    >
+                      <span>
+                        <strong>{signal.target_name}</strong>
+                        <small>{signal.title}</small>
+                      </span>
+                      <em>{signal.relevance_score}</em>
+                    </button>
+                    <a className="queue-open" href={signal.url} target="_blank" rel="noreferrer" aria-label={`Open live post for ${signal.target_name}`}>
+                      <ExternalLink size={15} />
+                    </a>
+                  </div>
                 ))}
               </div>
             )}
@@ -429,13 +445,30 @@ export function App() {
                     <strong>{selectedFreshSignal.platform} · {selectedFreshSignal.recommended_action}</strong>
                     <em>{selectedFreshSignal.relevance_score}%</em>
                   </span>
-                  <h3>{selectedFreshSignal.title}</h3>
+                  <h3>
+                    <a href={selectedFreshSignal.url} target="_blank" rel="noreferrer">
+                      {selectedFreshSignal.title}
+                    </a>
+                  </h3>
                   <p>{selectedFreshSignal.intelligence_summary}</p>
                   <div className="keyword-row">
                     {(selectedFreshSignal.matched_keywords.length ? selectedFreshSignal.matched_keywords : ["context signal"]).slice(0, 6).map((keyword) => (
                       <span key={keyword}>{keyword}</span>
                     ))}
                   </div>
+                  {selectedFreshSignal.professional_matches?.length ? (
+                    <div className="professional-lens">
+                      <span className="label"><ShieldCheck size={14} /> Tony lens</span>
+                      <div className="keyword-row">
+                        {selectedFreshSignal.professional_matches.slice(0, 6).map((keyword) => (
+                          <span key={keyword}>{keyword}</span>
+                        ))}
+                      </div>
+                      <small>
+                        Score: professional {selectedFreshSignal.score_components.professional}, category {selectedFreshSignal.score_components.category}, recency {selectedFreshSignal.score_components.recency}
+                      </small>
+                    </div>
+                  ) : null}
                   <a className="source-link" href={selectedFreshSignal.url} target="_blank" rel="noreferrer">
                     <ExternalLink size={15} />
                     Open source signal
@@ -445,17 +478,18 @@ export function App() {
                 {relevantFreshSignals.length > 1 && (
                   <div className="signals compact">
                     {relevantFreshSignals.map((signal) => (
-                      <button
-                        key={signal.id}
-                        className={`signal ${selectedFreshSignal?.id === signal.id ? "selected" : ""}`}
-                        onClick={() => setSelectedFreshSignalId(signal.id)}
-                      >
-                        <span className="signal-top">
-                          <strong>{signal.recommended_action}</strong>
-                          <em>{signal.relevance_score}%</em>
-                        </span>
-                        <span>{signal.title}</span>
-                      </button>
+                      <div key={signal.id} className={`signal-item ${selectedFreshSignal?.id === signal.id ? "selected" : ""}`}>
+                        <button className="signal" onClick={() => setSelectedFreshSignalId(signal.id)}>
+                          <span className="signal-top">
+                            <strong>{signal.recommended_action}</strong>
+                            <em>{signal.relevance_score}%</em>
+                          </span>
+                          <span>{signal.title}</span>
+                        </button>
+                        <a className="signal-open" href={signal.url} target="_blank" rel="noreferrer" aria-label={`Open live source for ${signal.title}`}>
+                          <ExternalLink size={15} />
+                        </a>
+                      </div>
                     ))}
                   </div>
                 )}
