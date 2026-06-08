@@ -19,3 +19,6 @@ build/
 *.tmp
 *.bak
 ~$*.docx
+
+__pycache__/
+*.py[cod]
