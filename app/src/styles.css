@@ -115,6 +115,57 @@ h2 {
   font-size: 0.9rem;
 }
 
+.recon-toolbar {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #d8d4ca;
+  border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(32, 39, 38, 0.06);
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+  margin: 0 auto 18px;
+  max-width: 1500px;
+  padding: 14px 16px;
+}
+
+.recon-toolbar strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.recon-toolbar span,
+.recon-toolbar em {
+  color: #63706a;
+  display: block;
+  font-size: 0.9rem;
+  font-style: normal;
+}
+
+.recon-toolbar em {
+  color: #9a3b2f;
+  margin-top: 4px;
+}
+
+.recon-toolbar button {
+  align-items: center;
+  background: #2f6850;
+  border: 0;
+  border-radius: 8px;
+  color: #ffffff;
+  display: inline-flex;
+  font-weight: 800;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 14px;
+  white-space: nowrap;
+}
+
+.recon-toolbar button:disabled {
+  background: #8fa79a;
+  cursor: progress;
+}
+
 .workspace {
   display: grid;
   gap: 14px;
@@ -300,6 +351,10 @@ h2 {
   gap: 10px;
 }
 
+a.signal {
+  text-decoration: none;
+}
+
 .signal {
   background: #fbfaf7;
   border: 1px solid #ddd9cf;
@@ -384,6 +439,38 @@ textarea {
   margin-bottom: 8px;
 }
 
+.empty-state {
+  align-items: start;
+  background: #fbfaf7;
+  border: 1px dashed #cfc9bc;
+  border-radius: 8px;
+  color: #34413d;
+  display: grid;
+  gap: 8px;
+  min-height: 140px;
+  padding: 16px;
+}
+
+.empty-state span {
+  color: #63706a;
+  line-height: 1.45;
+}
+
+.source-link {
+  align-items: center;
+  background: #eef5ee;
+  border: 1px solid #b8d3bd;
+  border-radius: 8px;
+  color: #1f5a40;
+  display: inline-flex;
+  font-weight: 800;
+  gap: 8px;
+  justify-content: center;
+  min-height: 40px;
+  padding: 8px 12px;
+  text-decoration: none;
+}
+
 .channel-count {
   align-items: center;
   background: #26383c;
@@ -466,9 +553,15 @@ textarea {
   }
 
   .metrics,
+  .recon-toolbar,
   .relationship-brief,
   .approval-grid {
     grid-template-columns: 1fr;
+  }
+
+  .recon-toolbar {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .channels {

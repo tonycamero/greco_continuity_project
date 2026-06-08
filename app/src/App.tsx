@@ -70,6 +70,32 @@ type Signal = {
   angle: string;
 };
 
+type FreshSignal = {
+  id: string;
+  target_name: string;
+  priority_tier: string;
+  platform: string;
+  title: string;
+  url: string;
+  published_at: string;
+  summary: string;
+  relevance_score: number;
+  matched_keywords: string[];
+  recommended_action: string;
+  risk: "Low" | "Medium" | "High";
+  best_first_channel: string;
+  first_move: string;
+  source_url: string;
+};
+
+type ReconResponse = {
+  fetched_at: string;
+  target_count: number;
+  signal_count: number;
+  signals: FreshSignal[];
+  errors: Array<{ target_name: string; errors: string[] }>;
+};
+
 const signalLibrary: Signal[] = [
   {
     id: "financial-nihilism",
@@ -154,6 +180,17 @@ function draftFor(row: Relationship, signal: Signal): string {
   return `This connects with a deeper question I am mapping: how communities coordinate value when trust, contribution, and exchange all have to be governed together. ${theme ? `The hook for me is ${theme.toLowerCase()}.` : ""}`;
 }
 
+function draftForFreshSignal(row: Relationship, signal: FreshSignal): string {
+  const keywords = signal.matched_keywords.length ? signal.matched_keywords.slice(0, 3).join(", ") : "trust and coordination";
+  if (row.ecosystem_segment.toLowerCase().includes("creator")) {
+    return `This connects with a pattern I keep seeing around ${keywords}: owning the audience is only the first layer. The deeper question is how communities coordinate contribution, trust, and value flow without becoming dependent on the platform layer.`;
+  }
+  if (row.ecosystem_segment.toLowerCase().includes("public goods") || row.ecosystem_segment.toLowerCase().includes("refi")) {
+    return `This is a useful signal around ${keywords}. Funding gets attention, but durable public goods also need exchange architecture: ways for communities to remember contribution, govern obligation, and keep value moving after the initial campaign.`;
+  }
+  return `This caught my attention because it sits near ${keywords}. I am increasingly convinced the next economic question is not only money, but how communities coordinate trust, contribution, and exchange without surrendering the relationship layer.`;
+}
+
 function followUpFor(row: Relationship): string[] {
   const invitation = row.likely_ask || "Invite into a Future of Civilization conversation";
   return [
@@ -175,6 +212,10 @@ export function App() {
   const [tier, setTier] = useState("Tier 1");
   const [selectedName, setSelectedName] = useState("");
   const [selectedSignalId, setSelectedSignalId] = useState(signalLibrary[0].id);
+  const [selectedFreshSignalId, setSelectedFreshSignalId] = useState("");
+  const [freshRecon, setFreshRecon] = useState<ReconResponse | null>(null);
+  const [isFetchingRecon, setIsFetchingRecon] = useState(false);
+  const [reconError, setReconError] = useState("");
   const [mode, setMode] = useState<"Recon" | "Draft" | "Approve">("Recon");
 
   useEffect(() => {
@@ -202,7 +243,29 @@ export function App() {
 
   const selected = relationships.find((row) => row.name === selectedName) ?? filtered[0];
   const selectedSignal = signalLibrary.find((signal) => signal.id === selectedSignalId) ?? signalLibrary[0];
+  const relevantFreshSignals = freshRecon?.signals.filter((signal) => signal.target_name === selected?.name) ?? [];
+  const selectedFreshSignal =
+    relevantFreshSignals.find((signal) => signal.id === selectedFreshSignalId) ?? relevantFreshSignals[0];
   const topMoves = filtered.slice(0, 5);
+
+  async function fetchReliableSources() {
+    setIsFetchingRecon(true);
+    setReconError("");
+    try {
+      const response = await fetch("/api/recon/fetch?limit=32");
+      if (!response.ok) throw new Error(`Recon API returned ${response.status}`);
+      const data = (await response.json()) as ReconResponse;
+      setFreshRecon(data);
+      setSelectedFreshSignalId(data.signals[0]?.id ?? "");
+      const firstHit = data.signals.find((signal) => relationships.some((row) => row.name === signal.target_name));
+      if (firstHit) setSelectedName(firstHit.target_name);
+      setMode("Recon");
+    } catch (error) {
+      setReconError(error instanceof Error ? error.message : "Recon fetch failed");
+    } finally {
+      setIsFetchingRecon(false);
+    }
+  }
 
   return (
     <main className="shell">
@@ -235,6 +298,23 @@ export function App() {
           <strong>{relationships.filter((row) => row.linkedin_url).length}</strong>
           <span>LinkedIn routes</span>
         </div>
+      </section>
+
+      <section className="recon-toolbar" aria-label="Reliable source fetch">
+        <div>
+          <p className="eyebrow">Morning Recon</p>
+          <strong>{freshRecon ? `${freshRecon.signal_count} fresh signals from ${freshRecon.target_count} targets` : "Fetch reliable public sources when your machine is running"}</strong>
+          <span>
+            {freshRecon
+              ? `Last fetch: ${new Date(freshRecon.fetched_at).toLocaleString()}`
+              : "RSS, Substack, blogs, podcasts, YouTube-adjacent pages, and public websites first."}
+          </span>
+          {reconError && <em>{reconError}</em>}
+        </div>
+        <button onClick={fetchReliableSources} disabled={isFetchingRecon}>
+          <RadioTower size={17} />
+          {isFetchingRecon ? "Fetching..." : "Fetch Reliable Sources"}
+        </button>
       </section>
 
       <section className="workspace">
@@ -313,7 +393,46 @@ export function App() {
               ))}
             </div>
 
-            {mode === "Recon" && (
+            {mode === "Recon" && selectedFreshSignal && (
+              <div className="signals">
+                {relevantFreshSignals.length ? (
+                  relevantFreshSignals.map((signal) => (
+                    <a
+                      key={signal.id}
+                      className={`signal ${selectedFreshSignal?.id === signal.id ? "selected" : ""}`}
+                      href={signal.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        setSelectedFreshSignalId(signal.id);
+                      }}
+                    >
+                      <span className="signal-top">
+                        <strong>{signal.platform} · {signal.recommended_action}</strong>
+                        <em>{signal.relevance_score}%</em>
+                      </span>
+                      <span>{signal.title}</span>
+                      <small>{signal.summary || signal.matched_keywords.join(", ") || "Fresh public-source signal"}</small>
+                    </a>
+                  ))
+                ) : (
+                  <div className="empty-state">
+                    <strong>No fresh reliable-source signal for this target yet.</strong>
+                    <span>Use the execution buttons for manual recon, or fetch again after more sources are added.</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {mode === "Recon" && freshRecon && !selectedFreshSignal && (
+              <div className="empty-state">
+                <strong>No fresh reliable-source signal for this target yet.</strong>
+                <span>Use the execution buttons for manual recon, or fetch again after more sources are added.</span>
+              </div>
+            )}
+
+            {mode === "Recon" && !freshRecon && !selectedFreshSignal && (
               <div className="signals">
                 {signalLibrary.map((signal) => (
                   <button
@@ -335,10 +454,23 @@ export function App() {
             {mode === "Draft" && (
               <div className="draft-box">
                 <div className="draft-meta">
-                  <span><ThumbsUp size={14} /> Proposed action: {selectedSignal.action}</span>
-                  <span>Risk: {selectedSignal.risk}</span>
+                  <span>
+                    <ThumbsUp size={14} />
+                    Proposed action: {selectedFreshSignal?.recommended_action || selectedSignal.action}
+                  </span>
+                  <span>Risk: {selectedFreshSignal?.risk || selectedSignal.risk}</span>
                 </div>
-                <textarea value={draftFor(selected, selectedSignal)} readOnly aria-label="Draft response" />
+                <textarea
+                  value={selectedFreshSignal ? draftForFreshSignal(selected, selectedFreshSignal) : draftFor(selected, selectedSignal)}
+                  readOnly
+                  aria-label="Draft response"
+                />
+                {selectedFreshSignal && (
+                  <a className="source-link" href={selectedFreshSignal.url} target="_blank" rel="noreferrer">
+                    <ExternalLink size={15} />
+                    Open source signal
+                  </a>
+                )}
               </div>
             )}
 
