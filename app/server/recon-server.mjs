@@ -20,6 +20,24 @@ const MAX_TARGETS = Number(process.env.RECON_MAX_TARGETS || 24);
 const MAX_ITEMS_PER_TARGET = Number(process.env.RECON_MAX_ITEMS_PER_TARGET || 3);
 
 const THEME_KEYWORDS = [
+  "ai",
+  "agency",
+  "automation",
+  "capital",
+  "civilization",
+  "collective",
+  "cooperation",
+  "digital public infrastructure",
+  "enshittification",
+  "extraction",
+  "funding",
+  "infrastructure",
+  "institution",
+  "local",
+  "power",
+  "social",
+  "sovereignty",
+  "technology",
   "trust",
   "coordination",
   "community",
@@ -194,16 +212,73 @@ function relevanceFor(row, item) {
 }
 
 function recommendedAction(row, score) {
-  if (score >= 78 && row.warm_path_needed === "Yes") return "Save + prepare human-reviewed reply";
-  if (score >= 78) return "Draft reply";
-  if (score >= 62) return "Like/save + consider owned post";
-  return "Save for context";
+  if (score >= 78 && row.warm_path_needed === "Yes") return "Human-gated reply";
+  if (score >= 78) return "Draft public reply";
+  if (score >= 62) return "Like/save + owned post seed";
+  if (score >= 42) return "Save + watch";
+  return "Archive as weak signal";
 }
 
 function riskFor(row, score) {
   if (row.warm_path_needed === "Yes" && score >= 70) return "High";
   if (row.priority_tier === "Tier 1") return "Medium";
   return "Low";
+}
+
+function primaryAngle(row, matched) {
+  const segment = clean(row.ecosystem_segment).toLowerCase();
+  if (matched.includes("public goods") || segment.includes("public goods") || segment.includes("refi")) {
+    return "Funding is only the beginning; durable communities need exchange architecture.";
+  }
+  if (matched.includes("creator") || segment.includes("creator")) {
+    return "Audience ownership is not enough; creators eventually need community value-flow ownership.";
+  }
+  if (matched.includes("trust") || matched.includes("identity") || segment.includes("identity")) {
+    return "Trust infrastructure becomes meaningful when it can coordinate obligation and exchange.";
+  }
+  if (matched.includes("ai") || matched.includes("technology") || matched.includes("automation")) {
+    return "As intelligence becomes abundant, stewardship and trust become the scarce coordination layer.";
+  }
+  if (matched.includes("local") || matched.includes("resilience")) {
+    return "Local resilience eventually needs local exchange capacity.";
+  }
+  return row.current_hook || row.first_move || "This may be a contextual signal for trust-mediated exchange.";
+}
+
+function intelligenceSummary(row, item, matched) {
+  const angle = primaryAngle(row, matched);
+  return `${row.name} has a fresh public signal near ${matched.slice(0, 4).join(", ") || "the project frame"}. ${angle}`;
+}
+
+function proposedReply(row, item, matched) {
+  const angle = primaryAngle(row, matched);
+  if (row.warm_path_needed === "Yes") {
+    return `This feels adjacent to a question I am mapping: how communities coordinate trust, contribution, and exchange without surrendering the relationship layer. ${angle}`;
+  }
+  return `This is a useful signal. ${angle} I keep coming back to the idea that community without exchange is fragile.`;
+}
+
+function ownedPostSeed(row, item, matched) {
+  const terms = matched.slice(0, 3).join(", ") || "trust, coordination, and exchange";
+  return `A post worth drafting: ${item.title}. Use it to connect ${terms} to the Regenerative Coordination Economy without pitching the book directly.`;
+}
+
+function followUpSequence(row, score) {
+  const channel = row.best_first_channel || "the best verified public route";
+  if (score >= 78) {
+    return [
+      "Day 0: save the source and draft a human-reviewed public reply.",
+      "Day 0: if approved, engage lightly in public without asking for anything.",
+      "Day 1: publish a short owned LinkedIn note if the idea deserves a broader frame.",
+      `Day 3: if they engage, prepare a private follow-up through ${channel}.`,
+      "Day 5-7: invite them into a Future of Civilization conversation only if the exchange is warm."
+    ];
+  }
+  return [
+    "Day 0: save the source and mark it as context.",
+    "Day 1: look for one more corroborating signal before public engagement.",
+    "Day 3: use it as background for a category post if the pattern repeats."
+  ];
 }
 
 async function fetchFeedForRelationship(row) {
@@ -241,6 +316,10 @@ async function fetchFeedForRelationship(row) {
           matched_keywords: relevance.matched_keywords,
           recommended_action: recommendedAction(row, relevance.score),
           risk: riskFor(row, relevance.score),
+          intelligence_summary: intelligenceSummary(row, item, relevance.matched_keywords),
+          proposed_reply: proposedReply(row, item, relevance.matched_keywords),
+          owned_post_seed: ownedPostSeed(row, item, relevance.matched_keywords),
+          follow_up_sequence: followUpSequence(row, relevance.score),
           best_first_channel: row.best_first_channel,
           first_move: row.first_move,
           source_url: item.source_url

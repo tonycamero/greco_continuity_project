@@ -246,6 +246,63 @@ h2 {
   gap: 8px;
 }
 
+.morning-queue {
+  border-bottom: 1px solid #e2ded5;
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding-bottom: 12px;
+}
+
+.queue-row {
+  align-items: center;
+  background: #26383c;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #ffffff;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) 38px;
+  min-height: 72px;
+  padding: 10px;
+  text-align: left;
+}
+
+.queue-row.selected {
+  background: #2f6850;
+  border-color: #b8d3bd;
+}
+
+.queue-row strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queue-row small {
+  color: #d5ded1;
+  display: -webkit-box;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  margin-top: 4px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.queue-row em {
+  align-items: center;
+  background: #ffffff;
+  border-radius: 999px;
+  color: #1f5a40;
+  display: inline-flex;
+  font-style: normal;
+  font-weight: 800;
+  height: 34px;
+  justify-content: center;
+}
+
 .relationship-row {
   align-items: center;
   background: #f8f7f3;
@@ -351,6 +408,55 @@ h2 {
   gap: 10px;
 }
 
+.intelligence-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.intel-card {
+  background: #fbfaf7;
+  border: 1px solid #d8d4ca;
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.intel-card.primary {
+  border-color: #2f6850;
+  box-shadow: inset 0 0 0 1px #2f6850;
+}
+
+.intel-card h3 {
+  font-size: 1.1rem;
+  line-height: 1.35;
+  margin: 8px 0;
+}
+
+.intel-card p {
+  color: #34413d;
+  line-height: 1.5;
+  margin: 0 0 12px;
+}
+
+.keyword-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 12px;
+}
+
+.keyword-row span {
+  background: #dceadf;
+  border-radius: 999px;
+  color: #1f5a40;
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 5px 8px;
+}
+
+.signals.compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 a.signal {
   text-decoration: none;
 }
@@ -429,6 +535,10 @@ textarea {
   padding: 16px;
 }
 
+.approval-card.wide {
+  grid-column: 1 / -1;
+}
+
 .approval-card svg {
   color: #2f6850;
   margin-bottom: 12px;
@@ -437,6 +547,15 @@ textarea {
 .approval-card strong {
   display: block;
   margin-bottom: 8px;
+}
+
+.approval-card ol {
+  color: #34413d;
+  display: grid;
+  gap: 8px;
+  line-height: 1.45;
+  margin: 0;
+  padding-left: 20px;
 }
 
 .empty-state {
@@ -469,6 +588,19 @@ textarea {
   min-height: 40px;
   padding: 8px 12px;
   text-decoration: none;
+}
+
+.owned-post-seed {
+  background: #f8f7f3;
+  border: 1px solid #d8d4ca;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.owned-post-seed p {
+  color: #34413d;
+  line-height: 1.45;
+  margin: 0;
 }
 
 .channel-count {
@@ -565,6 +697,10 @@ textarea {
   }
 
   .channels {
+    grid-template-columns: 1fr;
+  }
+
+  .signals.compact {
     grid-template-columns: 1fr;
   }
 }

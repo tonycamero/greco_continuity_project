@@ -83,6 +83,10 @@ type FreshSignal = {
   matched_keywords: string[];
   recommended_action: string;
   risk: "Low" | "Medium" | "High";
+  intelligence_summary: string;
+  proposed_reply: string;
+  owned_post_seed: string;
+  follow_up_sequence: string[];
   best_first_channel: string;
   first_move: string;
   source_url: string;
@@ -181,6 +185,7 @@ function draftFor(row: Relationship, signal: Signal): string {
 }
 
 function draftForFreshSignal(row: Relationship, signal: FreshSignal): string {
+  if (signal.proposed_reply) return signal.proposed_reply;
   const keywords = signal.matched_keywords.length ? signal.matched_keywords.slice(0, 3).join(", ") : "trust and coordination";
   if (row.ecosystem_segment.toLowerCase().includes("creator")) {
     return `This connects with a pattern I keep seeing around ${keywords}: owning the audience is only the first layer. The deeper question is how communities coordinate contribution, trust, and value flow without becoming dependent on the platform layer.`;
@@ -247,6 +252,7 @@ export function App() {
   const selectedFreshSignal =
     relevantFreshSignals.find((signal) => signal.id === selectedFreshSignalId) ?? relevantFreshSignals[0];
   const topMoves = filtered.slice(0, 5);
+  const topFreshSignals = freshRecon?.signals.slice(0, 8) ?? [];
 
   async function fetchReliableSources() {
     setIsFetchingRecon(true);
@@ -341,6 +347,29 @@ export function App() {
           </div>
 
           <div className="relationship-list">
+            {topFreshSignals.length > 0 && (
+              <div className="morning-queue">
+                <p className="eyebrow">Fresh Signal Queue</p>
+                {topFreshSignals.map((signal) => (
+                  <button
+                    key={signal.id}
+                    className={`queue-row ${selectedFreshSignalId === signal.id ? "selected" : ""}`}
+                    onClick={() => {
+                      setSelectedName(signal.target_name);
+                      setSelectedFreshSignalId(signal.id);
+                      setMode("Recon");
+                    }}
+                  >
+                    <span>
+                      <strong>{signal.target_name}</strong>
+                      <small>{signal.title}</small>
+                    </span>
+                    <em>{signal.relevance_score}</em>
+                  </button>
+                ))}
+              </div>
+            )}
+
             {topMoves.map((row) => (
               <button
                 key={row.name}
@@ -394,32 +423,40 @@ export function App() {
             </div>
 
             {mode === "Recon" && selectedFreshSignal && (
-              <div className="signals">
-                {relevantFreshSignals.length ? (
-                  relevantFreshSignals.map((signal) => (
-                    <a
-                      key={signal.id}
-                      className={`signal ${selectedFreshSignal?.id === signal.id ? "selected" : ""}`}
-                      href={signal.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        setSelectedFreshSignalId(signal.id);
-                      }}
-                    >
-                      <span className="signal-top">
-                        <strong>{signal.platform} · {signal.recommended_action}</strong>
-                        <em>{signal.relevance_score}%</em>
-                      </span>
-                      <span>{signal.title}</span>
-                      <small>{signal.summary || signal.matched_keywords.join(", ") || "Fresh public-source signal"}</small>
-                    </a>
-                  ))
-                ) : (
-                  <div className="empty-state">
-                    <strong>No fresh reliable-source signal for this target yet.</strong>
-                    <span>Use the execution buttons for manual recon, or fetch again after more sources are added.</span>
+              <div className="intelligence-stack">
+                <div className="intel-card primary">
+                  <span className="signal-top">
+                    <strong>{selectedFreshSignal.platform} · {selectedFreshSignal.recommended_action}</strong>
+                    <em>{selectedFreshSignal.relevance_score}%</em>
+                  </span>
+                  <h3>{selectedFreshSignal.title}</h3>
+                  <p>{selectedFreshSignal.intelligence_summary}</p>
+                  <div className="keyword-row">
+                    {(selectedFreshSignal.matched_keywords.length ? selectedFreshSignal.matched_keywords : ["context signal"]).slice(0, 6).map((keyword) => (
+                      <span key={keyword}>{keyword}</span>
+                    ))}
+                  </div>
+                  <a className="source-link" href={selectedFreshSignal.url} target="_blank" rel="noreferrer">
+                    <ExternalLink size={15} />
+                    Open source signal
+                  </a>
+                </div>
+
+                {relevantFreshSignals.length > 1 && (
+                  <div className="signals compact">
+                    {relevantFreshSignals.map((signal) => (
+                      <button
+                        key={signal.id}
+                        className={`signal ${selectedFreshSignal?.id === signal.id ? "selected" : ""}`}
+                        onClick={() => setSelectedFreshSignalId(signal.id)}
+                      >
+                        <span className="signal-top">
+                          <strong>{signal.recommended_action}</strong>
+                          <em>{signal.relevance_score}%</em>
+                        </span>
+                        <span>{signal.title}</span>
+                      </button>
+                    ))}
                   </div>
                 )}
               </div>
@@ -465,6 +502,12 @@ export function App() {
                   readOnly
                   aria-label="Draft response"
                 />
+                {selectedFreshSignal?.owned_post_seed && (
+                  <div className="owned-post-seed">
+                    <span className="label"><Sparkles size={14} /> Owned post seed</span>
+                    <p>{selectedFreshSignal.owned_post_seed}</p>
+                  </div>
+                )}
                 {selectedFreshSignal && (
                   <a className="source-link" href={selectedFreshSignal.url} target="_blank" rel="noreferrer">
                     <ExternalLink size={15} />
@@ -479,13 +522,24 @@ export function App() {
                 <div className="approval-card">
                   <CheckCircle2 size={22} />
                   <strong>Human gate</strong>
-                  <p>Review the exact post, draft, channel, and relationship risk before any public action.</p>
+                  <p>{selectedFreshSignal ? `Review this ${selectedFreshSignal.risk.toLowerCase()}-risk signal, the exact draft, and the source context before any public action.` : "Review the exact post, draft, channel, and relationship risk before any public action."}</p>
                 </div>
                 <div className="approval-card">
                   <ArrowUpRight size={22} />
                   <strong>Execution</strong>
                   <p>Codex can execute the approved browser action and log the receipt once platform access is available.</p>
                 </div>
+                {selectedFreshSignal?.follow_up_sequence?.length ? (
+                  <div className="approval-card wide">
+                    <Clock3 size={22} />
+                    <strong>Recommended sequence</strong>
+                    <ol>
+                      {selectedFreshSignal.follow_up_sequence.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ol>
+                  </div>
+                ) : null}
               </div>
             )}
           </section>
@@ -521,7 +575,7 @@ export function App() {
             <div className="followup">
               <p className="eyebrow">Follow-Up Sequence</p>
               <ol>
-                {followUpFor(selected).map((item) => (
+                {(selectedFreshSignal?.follow_up_sequence?.length ? selectedFreshSignal.follow_up_sequence : followUpFor(selected)).map((item) => (
                   <li key={item}>{item}</li>
                 ))}
               </ol>
