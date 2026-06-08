@@ -129,6 +129,12 @@ type ReconResponse = {
   signal_count: number;
   request_rate_per_minute?: number;
   signals: FreshSignal[];
+  source_status?: {
+    rss: boolean;
+    x: boolean;
+    linkedin: boolean;
+    linkedin_requires_author_urn: boolean;
+  };
   errors: Array<{ target_name: string; errors: string[] }>;
 };
 
@@ -273,7 +279,13 @@ export function App() {
   const [reconError, setReconError] = useState("");
   const [channelPolicies, setChannelPolicies] = useState<Record<string, ChannelStatus>>({});
   const [channelNotice, setChannelNotice] = useState("");
-  const [mode, setMode] = useState<"Recon" | "Draft" | "Approve">("Recon");
+  const [manualPlatform, setManualPlatform] = useState<"X" | "LinkedIn">("X");
+  const [manualUrl, setManualUrl] = useState("");
+  const [manualTitle, setManualTitle] = useState("");
+  const [manualText, setManualText] = useState("");
+  const [manualNotice, setManualNotice] = useState("");
+  const [isCapturingManual, setIsCapturingManual] = useState(false);
+  const [mode, setMode] = useState<"Recon" | "Draft" | "Approve" | "Manual">("Recon");
 
   useEffect(() => {
     Papa.parse<Relationship>("/data/greco_relationships_hydrated.csv", {
@@ -320,6 +332,11 @@ export function App() {
     relevantFreshSignals.find((signal) => signal.id === selectedFreshSignalId) ?? relevantFreshSignals[0];
   const topMoves = filtered.slice(0, 5);
   const topFreshSignals = freshRecon?.signals.slice(0, 8) ?? [];
+  const socialTargets = relationships
+    .filter((row) => row.x_url || row.linkedin_url)
+    .sort((a, b) => scoreRelationship(b) - scoreRelationship(a));
+  const selectedSocialIndex = selected ? socialTargets.findIndex((row) => row.name === selected.name) : -1;
+  const socialQueueLabel = selectedSocialIndex >= 0 ? `${selectedSocialIndex + 1}/${socialTargets.length}` : `${socialTargets.length} profiles`;
 
   async function openChannelRoute(row: Relationship, label: string, key: keyof Relationship, url: string) {
     const channel = throttledChannels[key as string];
@@ -355,11 +372,70 @@ export function App() {
     }
   }
 
+
+  function moveSocialTarget(direction: 1 | -1) {
+    if (!socialTargets.length) return;
+    const current = selectedSocialIndex >= 0 ? selectedSocialIndex : 0;
+    const next = (current + direction + socialTargets.length) % socialTargets.length;
+    setSelectedName(socialTargets[next].name);
+    setManualPlatform(socialTargets[next].x_url ? "X" : "LinkedIn");
+    setManualNotice("");
+    setMode("Manual");
+  }
+
+  async function captureManualSignal() {
+    if (!selected || !manualText.trim()) {
+      setManualNotice("Paste the post text or your field note before capturing.");
+      return;
+    }
+    setIsCapturingManual(true);
+    setManualNotice("");
+    try {
+      const response = await fetch("/api/recon/manual-signal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          target_name: selected.name,
+          platform: manualPlatform,
+          url: manualUrl,
+          title: manualTitle,
+          text: manualText
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || `Manual capture returned ${response.status}`);
+      const signal = data.signal as FreshSignal;
+      setFreshRecon((current) => {
+        const existing = current?.signals ?? [];
+        const nextSignals = [signal, ...existing.filter((item) => item.id !== signal.id)];
+        return {
+          fetched_at: current?.fetched_at || new Date().toISOString(),
+          target_count: current?.target_count || 1,
+          signal_count: nextSignals.length,
+          request_rate_per_minute: current?.request_rate_per_minute,
+          source_status: current?.source_status,
+          errors: current?.errors || [],
+          signals: nextSignals
+        };
+      });
+      setSelectedFreshSignalId(signal.id);
+      setManualUrl("");
+      setManualTitle("");
+      setManualText("");
+      setManualNotice(`Captured and scored: ${signal.relevance_score}% relevance.`);
+      setMode("Recon");
+    } catch (error) {
+      setManualNotice(error instanceof Error ? error.message : "Manual capture failed.");
+    } finally {
+      setIsCapturingManual(false);
+    }
+  }
+
   async function fetchReliableSources() {
     setIsFetchingRecon(true);
     setReconError("");
     try {
-      const response = await fetch("/api/recon/fetch?limit=32");
+      const response = await fetch("/api/recon/fetch?limit=all");
       if (!response.ok) throw new Error(`Recon API returned ${response.status}`);
       const data = (await response.json()) as ReconResponse;
       setFreshRecon(data);
@@ -410,17 +486,17 @@ export function App() {
       <section className="recon-toolbar" aria-label="Reliable source fetch">
         <div>
           <p className="eyebrow">Morning Recon</p>
-          <strong>{freshRecon ? `${freshRecon.signal_count} fresh signals from ${freshRecon.target_count} targets` : "Fetch reliable public sources when your machine is running"}</strong>
+          <strong>{freshRecon ? `${freshRecon.signal_count} fresh signals from ${freshRecon.target_count} targets` : "Fetch reliable sources across all relationship records"}</strong>
           <span>
             {freshRecon
               ? `Last fetch: ${new Date(freshRecon.fetched_at).toLocaleString()}`
-              : "RSS, Substack, blogs, podcasts, and public websites first. Pacing: 4 requests/min by default."}
+              : "All 113 records. RSS/blogs plus X API when configured; LinkedIn only through official API access. Pacing: 4 requests/min."}
           </span>
           {reconError && <em>{reconError}</em>}
         </div>
         <button onClick={fetchReliableSources} disabled={isFetchingRecon}>
           <RadioTower size={17} />
-          {isFetchingRecon ? "Fetching..." : "Fetch Reliable Sources"}
+          {isFetchingRecon ? "Fetching all..." : "Fetch All Reliable Sources"}
         </button>
       </section>
 
@@ -520,7 +596,7 @@ export function App() {
             </div>
 
             <div className="mode-tabs" role="group" aria-label="Workflow mode">
-              {(["Recon", "Draft", "Approve"] as const).map((item) => (
+              {(["Recon", "Manual", "Draft", "Approve"] as const).map((item) => (
                 <button key={item} className={mode === item ? "active" : ""} onClick={() => setMode(item)}>
                   {item}
                 </button>
@@ -608,6 +684,60 @@ export function App() {
                     <small>{signal.angle}</small>
                   </button>
                 ))}
+              </div>
+            )}
+
+
+
+            {mode === "Manual" && (
+              <div className="manual-recon">
+                <div className="manual-header">
+                  <div>
+                    <p className="eyebrow">Manual Social Recon</p>
+                    <h3>{selected.name}</h3>
+                    <span>{socialQueueLabel} · open one property, inspect like a human, capture only clean signals.</span>
+                  </div>
+                  <div className="manual-nav">
+                    <button onClick={() => moveSocialTarget(-1)}>Previous</button>
+                    <button onClick={() => moveSocialTarget(1)}>Next</button>
+                  </div>
+                </div>
+
+                <div className="manual-routes">
+                  {selected.x_url ? <button onClick={() => openChannelRoute(selected, "X", "x_url", selected.x_url)}><X size={16} /> Open X</button> : <span>X missing</span>}
+                  {selected.linkedin_url ? <button onClick={() => openChannelRoute(selected, "LinkedIn", "linkedin_url", selected.linkedin_url)}><Linkedin size={16} /> Open LinkedIn</button> : <span>LinkedIn missing</span>}
+                </div>
+
+                <div className="capture-grid">
+                  <label>
+                    <span>Platform</span>
+                    <select value={manualPlatform} onChange={(event) => setManualPlatform(event.target.value as "X" | "LinkedIn")}>
+                      <option value="X">X</option>
+                      <option value="LinkedIn">LinkedIn</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>Post URL</span>
+                    <input value={manualUrl} onChange={(event) => setManualUrl(event.target.value)} placeholder="Paste the post URL when available" />
+                  </label>
+                  <label className="wide">
+                    <span>Short title</span>
+                    <input value={manualTitle} onChange={(event) => setManualTitle(event.target.value)} placeholder="Optional title for the signal" />
+                  </label>
+                  <label className="wide">
+                    <span>Post text or field note</span>
+                    <textarea value={manualText} onChange={(event) => setManualText(event.target.value)} placeholder="Paste the relevant post text, or write a short note about why this profile/post matters." />
+                  </label>
+                </div>
+
+                <div className="manual-actions">
+                  <button onClick={captureManualSignal} disabled={isCapturingManual}>
+                    <Sparkles size={16} />
+                    {isCapturingManual ? "Scoring..." : "Capture + Score Signal"}
+                  </button>
+                  <button onClick={() => moveSocialTarget(1)}>No Clean Signal, Next</button>
+                </div>
+                {manualNotice && <p className="manual-notice">{manualNotice}</p>}
               </div>
             )}
 

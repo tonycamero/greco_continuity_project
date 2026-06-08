@@ -24,6 +24,11 @@ const MAX_ITEMS_PER_TARGET = Number(process.env.RECON_MAX_ITEMS_PER_TARGET || 3)
 const RECON_REQUESTS_PER_MINUTE = Number(process.env.RECON_REQUESTS_PER_MINUTE || 4);
 const RECON_REQUEST_JITTER_MS = Number(process.env.RECON_REQUEST_JITTER_MS || 2500);
 const RECON_REQUEST_INTERVAL_MS = RECON_REQUESTS_PER_MINUTE > 0 ? Math.ceil(60_000 / RECON_REQUESTS_PER_MINUTE) : 0;
+const X_BEARER_TOKEN = process.env.X_BEARER_TOKEN || "";
+const X_MAX_POSTS = Number(process.env.X_MAX_POSTS || 5);
+const LINKEDIN_ACCESS_TOKEN = process.env.LINKEDIN_ACCESS_TOKEN || "";
+const LINKEDIN_API_VERSION = process.env.LINKEDIN_API_VERSION || "202603";
+const LINKEDIN_MAX_POSTS = Number(process.env.LINKEDIN_MAX_POSTS || 5);
 
 const CHANNEL_POLICIES = {
   x: {
@@ -368,6 +373,75 @@ async function fetchText(url, timeoutMs = 4500) {
   }
 }
 
+
+async function fetchJson(url, headers = {}, timeoutMs = 6000) {
+  await paceReconRequest();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        "user-agent": "GrecoContinuityOS/0.1 (+local research assistant)",
+        accept: "application/json",
+        ...headers
+      }
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      const reset = response.headers.get("x-rate-limit-reset");
+      const resetNote = reset ? `; resets at ${new Date(Number(reset) * 1000).toISOString()}` : "";
+      throw new Error(`HTTP ${response.status}${resetNote}: ${text.slice(0, 180)}`);
+    }
+    return text ? JSON.parse(text) : {};
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function xHandle(row) {
+  const raw = clean(row.x_url);
+  if (!raw) return "";
+  try {
+    const url = new URL(raw.startsWith("http") ? raw : `https://${raw}`);
+    const handle = clean(url.pathname.split("/").filter(Boolean)[0] || "").replace(/^@/, "");
+    return ["i", "intent", "search", "share", "home"].includes(handle.toLowerCase()) ? "" : handle;
+  } catch {
+    return clean(raw).replace(/^@/, "").replace(/^x\.com\//, "").split(/[/?#]/)[0];
+  }
+}
+
+function linkedinAuthorUrn(row) {
+  return clean(row.linkedin_author_urn || row.linkedin_urn || row.linkedin_person_urn || row.linkedin_organization_urn);
+}
+
+function signalFromItem(row, item, platform) {
+  const relevance = relevanceFor(row, item);
+  return {
+    id: `${row.name}:${platform}:${item.url}`,
+    target_name: row.name,
+    priority_tier: row.priority_tier,
+    platform,
+    title: item.title,
+    url: item.url,
+    published_at: item.published_at,
+    summary: item.summary,
+    relevance_score: relevance.score,
+    matched_keywords: relevance.matched_keywords,
+    professional_matches: relevance.professional_matches,
+    score_components: relevance.score_components,
+    recommended_action: recommendedAction(row, relevance.score),
+    risk: riskFor(row, relevance.score),
+    intelligence_summary: intelligenceSummary(row, item, relevance.matched_keywords, relevance.professional_matches),
+    proposed_reply: proposedReply(row, item, relevance.matched_keywords, relevance.professional_matches),
+    owned_post_seed: ownedPostSeed(row, item, relevance.matched_keywords, relevance.professional_matches),
+    follow_up_sequence: followUpSequence(row, relevance.score),
+    best_first_channel: row.best_first_channel,
+    first_move: row.first_move,
+    source_url: item.source_url
+  };
+}
+
 function discoverFeeds(html, baseUrl) {
   const feeds = [];
   const pattern = /<link[^>]+(?:type=["']application\/(?:rss|atom)\+xml["'][^>]*href=["']([^"']+)["']|href=["']([^"']+)["'][^>]*type=["']application\/(?:rss|atom)\+xml["'])[^>]*>/gi;
@@ -547,30 +621,7 @@ async function fetchFeedForRelationship(row) {
       }
       if (!looksXml) continue;
       for (const item of parseFeed(result.text, result.finalUrl).slice(0, MAX_ITEMS_PER_TARGET)) {
-        const relevance = relevanceFor(row, item);
-        found.push({
-          id: `${row.name}:${item.url}`,
-          target_name: row.name,
-          priority_tier: row.priority_tier,
-          platform: "RSS",
-          title: item.title,
-          url: item.url,
-          published_at: item.published_at,
-          summary: item.summary,
-          relevance_score: relevance.score,
-          matched_keywords: relevance.matched_keywords,
-          professional_matches: relevance.professional_matches,
-          score_components: relevance.score_components,
-          recommended_action: recommendedAction(row, relevance.score),
-          risk: riskFor(row, relevance.score),
-          intelligence_summary: intelligenceSummary(row, item, relevance.matched_keywords, relevance.professional_matches),
-          proposed_reply: proposedReply(row, item, relevance.matched_keywords, relevance.professional_matches),
-          owned_post_seed: ownedPostSeed(row, item, relevance.matched_keywords, relevance.professional_matches),
-          follow_up_sequence: followUpSequence(row, relevance.score),
-          best_first_channel: row.best_first_channel,
-          first_move: row.first_move,
-          source_url: item.source_url
-        });
+        found.push(signalFromItem(row, item, "RSS"));
       }
     } catch (error) {
       errors.push(`${url}: ${error.message}`);
@@ -580,8 +631,97 @@ async function fetchFeedForRelationship(row) {
   return { found, errors };
 }
 
+
+async function fetchXForRelationship(row) {
+  const handle = xHandle(row);
+  if (!X_BEARER_TOKEN || !handle) return { found: [], errors: [] };
+  const errors = [];
+  try {
+    const auth = { authorization: `Bearer ${X_BEARER_TOKEN}` };
+    const user = await fetchJson(`https://api.x.com/2/users/by/username/${encodeURIComponent(handle)}?user.fields=username,name`, auth);
+    const userId = user?.data?.id;
+    if (!userId) return { found: [], errors: [`X ${handle}: no user id returned`] };
+    const maxResults = Math.max(5, Math.min(100, X_MAX_POSTS));
+    const timeline = await fetchJson(
+      `https://api.x.com/2/users/${encodeURIComponent(userId)}/tweets?max_results=${maxResults}&tweet.fields=created_at,public_metrics&exclude=retweets,replies`,
+      auth
+    );
+    const found = (timeline.data || []).slice(0, X_MAX_POSTS).map((tweet) => {
+      const text = clean(tweet.text);
+      const metrics = tweet.public_metrics
+        ? ` Likes ${tweet.public_metrics.like_count || 0}; reposts ${tweet.public_metrics.retweet_count || 0}; replies ${tweet.public_metrics.reply_count || 0}.`
+        : "";
+      const item = {
+        title: text.slice(0, 180) || `X post by @${handle}`,
+        url: `https://x.com/${handle}/status/${tweet.id}`,
+        published_at: tweet.created_at || "",
+        summary: `${text}${metrics}`.slice(0, 500),
+        source_url: `https://api.x.com/2/users/${userId}/tweets`
+      };
+      return signalFromItem(row, item, "X");
+    });
+    return { found, errors };
+  } catch (error) {
+    errors.push(`X ${handle}: ${error.message}`);
+    return { found: [], errors };
+  }
+}
+
+async function fetchLinkedInForRelationship(row) {
+  const authorUrn = linkedinAuthorUrn(row);
+  if (!LINKEDIN_ACCESS_TOKEN || !authorUrn) return { found: [], errors: [] };
+  const errors = [];
+  try {
+    const encodedAuthor = encodeURIComponent(authorUrn);
+    const data = await fetchJson(
+      `https://api.linkedin.com/rest/posts?q=author&author=${encodedAuthor}&count=${Math.max(1, Math.min(20, LINKEDIN_MAX_POSTS))}&sortBy=LAST_MODIFIED`,
+      {
+        authorization: `Bearer ${LINKEDIN_ACCESS_TOKEN}`,
+        "LinkedIn-Version": LINKEDIN_API_VERSION,
+        "X-Restli-Protocol-Version": "2.0.0"
+      }
+    );
+    const found = (data.elements || []).slice(0, LINKEDIN_MAX_POSTS).map((post) => {
+      const postUrn = clean(post.id || post.urn || post.entity);
+      const commentary = clean(post.commentary?.text || post.commentary || post.specificContent?.['com.linkedin.ugc.ShareContent']?.shareCommentary?.text || "");
+      const created = post.createdAt || post.created?.time || post.lastModifiedAt || post.lastModified?.time;
+      const publishedAt = typeof created === "number" ? new Date(created).toISOString() : "";
+      const item = {
+        title: commentary.slice(0, 180) || `LinkedIn post by ${row.name}`,
+        url: postUrn ? `https://www.linkedin.com/feed/update/${encodeURIComponent(postUrn)}/` : clean(row.linkedin_url),
+        published_at: publishedAt,
+        summary: commentary.slice(0, 500),
+        source_url: "https://api.linkedin.com/rest/posts"
+      };
+      return signalFromItem(row, item, "LinkedIn");
+    });
+    return { found, errors };
+  } catch (error) {
+    errors.push(`LinkedIn ${row.name}: ${error.message}`);
+    return { found: [], errors };
+  }
+}
+
+async function fetchReliableSourcesForRelationship(row) {
+  const combined = { found: [], errors: [] };
+  for (const fetcher of [fetchFeedForRelationship, fetchXForRelationship, fetchLinkedInForRelationship]) {
+    const result = await fetcher(row);
+    combined.found.push(...result.found);
+    combined.errors.push(...result.errors);
+  }
+  return combined;
+}
+
+function hasReliableSource(row) {
+  return Boolean(
+    reliableUrls(row).length ||
+    (X_BEARER_TOKEN && xHandle(row)) ||
+    (LINKEDIN_ACCESS_TOKEN && linkedinAuthorUrn(row))
+  );
+}
+
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, service: "greco-recon", port: PORT });
+  res.json({ ok: true, service: "greco-recon", port: PORT, sources: { rss: true, x: Boolean(X_BEARER_TOKEN), linkedin: Boolean(LINKEDIN_ACCESS_TOKEN) } });
 });
 
 app.get("/api/signals", async (req, res, next) => {
@@ -645,13 +785,54 @@ app.post("/api/execution/open", async (req, res, next) => {
   }
 });
 
+
+app.post("/api/recon/manual-signal", async (req, res, next) => {
+  try {
+    const targetName = clean(req.body?.target_name);
+    const platform = clean(req.body?.platform || "Manual");
+    const url = clean(req.body?.url);
+    const title = clean(req.body?.title);
+    const summary = clean(req.body?.summary || req.body?.text || req.body?.notes);
+    if (!targetName || !summary) {
+      res.status(400).json({ error: "target_name and summary/text are required" });
+      return;
+    }
+
+    const relationships = await readRelationships();
+    const row = relationships.find((candidate) => candidate.name === targetName);
+    if (!row) {
+      res.status(404).json({ error: `No relationship found for ${targetName}` });
+      return;
+    }
+
+    const fallbackUrl = platform.toLowerCase().includes("linkedin") ? clean(row.linkedin_url) : clean(row.x_url || row.website);
+    const item = {
+      title: title || summary.slice(0, 180) || `${platform} signal for ${row.name}`,
+      url: url || fallbackUrl || `manual://${encodeURIComponent(row.name)}/${Date.now()}`,
+      published_at: clean(req.body?.published_at) || new Date().toISOString(),
+      summary: summary.slice(0, 700),
+      source_url: "manual-social-recon"
+    };
+    const signal = {
+      ...signalFromItem(row, item, platform),
+      capture_source: "manual-social-recon",
+      engagement_status: "captured"
+    };
+    const persistence = await appendSignals([signal]);
+    res.json({ captured_at: new Date().toISOString(), signal, ...persistence });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get("/api/recon/fetch", async (req, res, next) => {
   try {
-    const limit = Math.min(Number(req.query.limit || MAX_TARGETS), 80);
     const relationships = await readRelationships();
+    const requestedLimit = clean(req.query.limit || MAX_TARGETS).toLowerCase();
+    const limit = requestedLimit === "all" ? relationships.length : Math.min(Number(requestedLimit || MAX_TARGETS), relationships.length, 500);
     const targets = relationships
       .map((row) => ({ row, urls: reliableUrls(row) }))
-      .filter(({ urls }) => urls.length)
+      .filter(({ row }) => hasReliableSource(row))
       .sort((a, b) => {
         const seedDiff = Number(Boolean(SEED_FEEDS[b.row.name])) - Number(Boolean(SEED_FEEDS[a.row.name]));
         if (seedDiff !== 0) return seedDiff;
@@ -662,7 +843,7 @@ app.get("/api/recon/fetch", async (req, res, next) => {
     const signals = [];
     const errors = [];
     for (const target of targets) {
-      const result = await fetchFeedForRelationship(target.row);
+      const result = await fetchReliableSourcesForRelationship(target.row);
       signals.push(...result.found);
       if (result.errors.length) errors.push({ target_name: target.row.name, errors: result.errors.slice(0, 3) });
     }
@@ -679,6 +860,12 @@ app.get("/api/recon/fetch", async (req, res, next) => {
       target_count: targets.length,
       signal_count: signals.length,
       request_rate_per_minute: RECON_REQUESTS_PER_MINUTE,
+      source_status: {
+        rss: true,
+        x: Boolean(X_BEARER_TOKEN),
+        linkedin: Boolean(LINKEDIN_ACCESS_TOKEN),
+        linkedin_requires_author_urn: true
+      },
       appended_count: persistence.appendedCount,
       updated_count: persistence.updatedCount,
       total_saved: persistence.totalSaved,

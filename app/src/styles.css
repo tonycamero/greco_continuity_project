@@ -553,6 +553,123 @@ a.signal {
   padding: 4px 8px;
 }
 
+
+.manual-recon {
+  display: grid;
+  gap: 12px;
+}
+
+.manual-header {
+  align-items: start;
+  background: #fbfaf7;
+  border: 1px solid #d8d4ca;
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 14px;
+}
+
+.manual-header h3 {
+  font-size: 1.2rem;
+  margin: 0 0 4px;
+}
+
+.manual-header span,
+.capture-grid span {
+  color: #5c6964;
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
+.manual-nav,
+.manual-routes,
+.manual-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.manual-nav button,
+.manual-routes button,
+.manual-actions button {
+  align-items: center;
+  background: #eef5ee;
+  border: 1px solid #b8d3bd;
+  border-radius: 8px;
+  color: #1f5a40;
+  display: inline-flex;
+  font: inherit;
+  font-weight: 800;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px 12px;
+}
+
+.manual-actions button:first-child {
+  background: #26383c;
+  border-color: #26383c;
+  color: #ffffff;
+}
+
+.manual-actions button:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.manual-routes span {
+  align-items: center;
+  background: #f6f5f0;
+  border: 1px dashed #d8d4ca;
+  border-radius: 8px;
+  color: #98a098;
+  display: inline-flex;
+  min-height: 40px;
+  padding: 8px 12px;
+}
+
+.capture-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 170px) minmax(0, 1fr);
+}
+
+.capture-grid label {
+  display: grid;
+  gap: 6px;
+}
+
+.capture-grid label.wide {
+  grid-column: 1 / -1;
+}
+
+.capture-grid input,
+.capture-grid select,
+.capture-grid textarea {
+  background: #fbfaf7;
+  border: 1px solid #d8d4ca;
+  border-radius: 8px;
+  color: #172226;
+  font: inherit;
+  min-height: 40px;
+  padding: 9px 10px;
+  width: 100%;
+}
+
+.capture-grid textarea {
+  min-height: 170px;
+}
+
+.manual-notice {
+  background: #eef5ee;
+  border: 1px solid #b8d3bd;
+  border-radius: 8px;
+  color: #1f5a40;
+  line-height: 1.45;
+  margin: 0;
+  padding: 10px 12px;
+}
+
 .draft-box {
   display: grid;
   gap: 10px;
