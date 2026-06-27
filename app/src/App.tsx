@@ -367,17 +367,20 @@ function relationshipForContact(contact: string, rows: Relationship[]): Relation
 }
 
 function platformIcon(platform: PublishingPlatform) {
-  const marks: Record<PublishingPlatform, string> = {
-    X: "X",
-    LinkedIn: "in",
-    Bluesky: "BS",
-    Threads: "Th",
-    Facebook: "f",
-    Reddit: "r/",
-    Email: "@",
-    Copy: "cp"
+  const assetNames: Partial<Record<PublishingPlatform, string>> = {
+    X: "x",
+    LinkedIn: "linkedin",
+    Bluesky: "bluesky",
+    Threads: "threads",
+    Facebook: "facebook",
+    Reddit: "reddit"
   };
-  return <span className={`platform-mark ${platform.toLowerCase()}`} aria-hidden="true">{marks[platform]}</span>;
+  const assetName = assetNames[platform];
+  if (assetName) {
+    return <img className="platform-logo" src={`/platform-icons/${assetName}.svg`} alt="" aria-hidden="true" />;
+  }
+  if (platform === "Email") return <Mail size={18} />;
+  return <Clipboard size={18} />;
 }
 
 export function App() {
