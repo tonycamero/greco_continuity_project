@@ -5,6 +5,8 @@ import {
   CheckCircle2,
   Clock3,
   Clipboard,
+  Send,
+  Share2,
   ExternalLink,
   Filter,
   Globe2,
@@ -148,6 +150,8 @@ type PublishingContact = {
   "Why Notify": string;
   "Notification Angle": string;
 };
+
+type PublishingPlatform = "X" | "LinkedIn" | "Bluesky" | "Threads" | "Facebook" | "Reddit" | "Email" | "Copy";
 
 type PublishingDay = {
   id: string;
@@ -318,6 +322,59 @@ function parsePublishingQueue(markdown: string): PublishingDay[] {
     });
 }
 
+
+function xIntentText(body: string): string {
+  const firstThreadPost = body.match(/^1\.\s*([\s\S]*?)(?=\n\n2\.\s|$)/);
+  const candidate = (firstThreadPost?.[1] ?? body).trim();
+  return candidate.length > 270 ? `${candidate.slice(0, 267).trim()}...` : candidate;
+}
+
+function platformPostUrl(platform: PublishingPlatform, post: PublishingDay): string {
+  const text = platform === "X" ? xIntentText(post.body) : post.body;
+  const encodedText = encodeURIComponent(text);
+  const encodedTitle = encodeURIComponent(post.theme || "Regenerative Coordination Economy");
+  const shareUrl = encodeURIComponent(window.location.href);
+  if (platform === "X") return `https://twitter.com/intent/tweet?text=${encodedText}`;
+  if (platform === "LinkedIn") return "https://www.linkedin.com/feed/?shareActive=true";
+  if (platform === "Bluesky") return `https://bsky.app/intent/compose?text=${encodedText}`;
+  if (platform === "Threads") return `https://www.threads.net/intent/post?text=${encodedText}`;
+  if (platform === "Facebook") return `https://www.facebook.com/sharer/sharer.php?u=${shareUrl}`;
+  if (platform === "Reddit") return `https://www.reddit.com/submit?title=${encodedTitle}&text=${encodedText}`;
+  if (platform === "Email") return `mailto:?subject=${encodedTitle}&body=${encodedText}`;
+  return "";
+}
+
+function platformCopyNote(platform: PublishingPlatform, post: PublishingDay): string {
+  if (platform === "X" && post.platform === "X") return "Copies the full thread and opens X with the first post prefilled.";
+  if (platform === "LinkedIn") return "Copies the full post and opens the LinkedIn composer.";
+  if (platform === "Facebook") return "Copies the full post. Facebook opens with a link share; paste the copied text as commentary.";
+  if (platform === "Copy") return "Copies the full post for any platform or community channel.";
+  return "Copies the full post and opens the platform composer when supported.";
+}
+
+const primaryPlatforms: PublishingPlatform[] = ["X", "LinkedIn", "Bluesky", "Threads", "Facebook", "Reddit", "Email", "Copy"];
+
+function normalizedName(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function relationshipForContact(contact: string, rows: Relationship[]): Relationship | undefined {
+  const normalizedContact = normalizedName(contact.split("/")[0] || contact);
+  if (!normalizedContact) return undefined;
+  return rows.find((row) => {
+    const normalizedRow = normalizedName(row.name);
+    return normalizedRow === normalizedContact || normalizedRow.includes(normalizedContact) || normalizedContact.includes(normalizedRow);
+  });
+}
+
+function platformIcon(platform: PublishingPlatform) {
+  if (platform === "X") return <X size={17} />;
+  if (platform === "LinkedIn") return <Linkedin size={17} />;
+  if (platform === "Email") return <Mail size={17} />;
+  if (platform === "Copy") return <Clipboard size={17} />;
+  return <Share2 size={17} />;
+}
+
 export function App() {
   const [page, setPage] = useState<"pipeline" | "publishing">("pipeline");
   const [relationships, setRelationships] = useState<Relationship[]>([]);
@@ -343,6 +400,7 @@ export function App() {
   const [strategyMarkdown, setStrategyMarkdown] = useState("");
   const [selectedPostId, setSelectedPostId] = useState("");
   const [copyNotice, setCopyNotice] = useState("");
+  const [postLaunchNotice, setPostLaunchNotice] = useState("");
 
   useEffect(() => {
     Papa.parse<Relationship>("/data/greco_relationships_hydrated.csv", {
@@ -434,6 +492,18 @@ export function App() {
     } catch {
       setCopyNotice("Copy failed. Select the text and copy manually.");
     }
+  }
+
+
+  async function launchPlatformPost(post: PublishingDay, platform: PublishingPlatform = post.platform) {
+    try {
+      await navigator.clipboard.writeText(post.body);
+      setPostLaunchNotice(`${platform} copy ready.${platform === "Copy" ? "" : " The composer is opening now."}`);
+    } catch {
+      setPostLaunchNotice(`${platform} ${platform === "Copy" ? "copy" : "composer"} may need manual copy/paste.`);
+    }
+    const url = platformPostUrl(platform, post);
+    if (url) window.open(url, "_blank", "noopener,noreferrer");
   }
 
   async function openChannelRoute(row: Relationship, label: string, key: keyof Relationship, url: string) {
@@ -641,7 +711,28 @@ export function App() {
                   ))}
                 </div>
 
+                <div className="post-launch-card">
+                  <div>
+                    <span className="label">Phone publishing</span>
+                    <p>{platformCopyNote(selectedPublishingDay.platform, selectedPublishingDay)}</p>
+                  </div>
+                  <button onClick={() => launchPlatformPost(selectedPublishingDay)}>
+                    <Send size={16} />
+                    Copy + Open {selectedPublishingDay.platform}
+                  </button>
+                </div>
+                {postLaunchNotice && <p className="post-launch-notice">{postLaunchNotice}</p>}
+
                 <textarea className="post-copyarea" value={selectedPublishingDay.body} readOnly aria-label="Selected publishing post" />
+
+                <div className="platform-launch-dock" aria-label="Post this content to a platform">
+                  <span>Post to</span>
+                  {primaryPlatforms.map((platform) => (
+                    <button key={platform} onClick={() => launchPlatformPost(selectedPublishingDay, platform)} title={`Copy and open ${platform}`} aria-label={`Copy and open ${platform}`}>
+                      {platformIcon(platform)}
+                    </button>
+                  ))}
+                </div>
 
                 <div className="copy-footer">
                   <button onClick={() => copyText("Post and notification packet", `${selectedPublishingDay.body}\n\n---\n\n${notificationText}`)}>
@@ -681,9 +772,24 @@ export function App() {
                   <p>{selectedPublishingContact["Notification Angle"]}</p>
                 </div>
                 <div className="contact-chip-list">
-                  {contactList.map((contact) => (
-                    <span key={contact}>{contact}</span>
-                  ))}
+                  {contactList.map((contact) => {
+                    const contactRow = relationshipForContact(contact, relationships);
+                    return (
+                      <span key={contact} className="contact-chip">
+                        <strong>{contact}</strong>
+                        {contactRow?.x_url && (
+                          <button onClick={() => openChannelRoute(contactRow, "X", "x_url", contactRow.x_url)} aria-label={`Open X for ${contact}`}>
+                            <X size={13} />
+                          </button>
+                        )}
+                        {contactRow?.linkedin_url && (
+                          <button onClick={() => openChannelRoute(contactRow, "LinkedIn", "linkedin_url", contactRow.linkedin_url)} aria-label={`Open LinkedIn for ${contact}`}>
+                            <Linkedin size={13} />
+                          </button>
+                        )}
+                      </span>
+                    );
+                  })}
                 </div>
               </div>
             ) : (

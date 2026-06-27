@@ -123,3 +123,21 @@ Manual Social Recon is for X and LinkedIn before official APIs are connected. It
 Captured manual signals are scored with the same project and Tony professional lens, appended to `app/data/profile-signals.json`, and then shown in the fresh signal workflow for drafting and approval.
 
 Use **No Clean Signal, Next** to move through the social queue without capturing anything. This gives you an all-113 review path without automated scraping.
+
+
+## Public Content Launchers
+
+The Publishing Desk serves each recommended post with mobile-friendly platform launchers under the content.
+
+Supported launch targets:
+
+- X: copies the full thread and opens an X intent with the first post prefilled
+- LinkedIn: copies the full post and opens the LinkedIn composer
+- Bluesky: copies the full post and opens the Bluesky composer
+- Threads: copies the full post and opens the Threads composer
+- Facebook: copies the full post and opens a share surface
+- Reddit: copies the full post and opens a submit surface
+- Email: opens a mail draft
+- Copy: clipboard-only fallback
+
+The app uses a copy-first pattern because several platforms do not reliably allow long-form prefilled post text from a public web link, especially on mobile.

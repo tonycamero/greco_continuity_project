@@ -313,6 +313,120 @@ h2 {
   padding: 6px 9px;
 }
 
+
+.platform-launch-dock,
+.platform-launch-grid {
+  align-items: center;
+  background: #f8f7f3;
+  border: 1px solid #d8d4ca;
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0;
+  padding: 10px;
+}
+
+.platform-launch-dock span {
+  color: #5c6964;
+  font-size: 0.78rem;
+  font-weight: 800;
+  margin-right: 2px;
+  text-transform: uppercase;
+}
+
+.platform-launch-dock button,
+.platform-launch-grid button {
+  align-items: center;
+  background: #eef5ee;
+  border: 1px solid #b8d3bd;
+  border-radius: 8px;
+  color: #1f5a40;
+  display: inline-flex;
+  font: inherit;
+  font-weight: 800;
+  gap: 7px;
+  justify-content: center;
+  min-height: 40px;
+  min-width: 40px;
+  padding: 8px;
+}
+
+.platform-launch-dock button:first-of-type {
+  background: #26383c;
+  border-color: #26383c;
+  color: #ffffff;
+}
+
+.post-launch-card,
+.post-launch-notice {
+  background: #fbfaf7;
+  border: 1px solid #d8d4ca;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  padding: 12px;
+}
+
+.post-launch-card {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.post-launch-card p,
+.post-launch-notice {
+  color: #34413d;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.post-launch-card button {
+  align-items: center;
+  background: #26383c;
+  border: 0;
+  border-radius: 8px;
+  color: #ffffff;
+  display: inline-flex;
+  font: inherit;
+  font-weight: 800;
+  gap: 8px;
+  min-height: 42px;
+  padding: 9px 12px;
+  white-space: nowrap;
+}
+
+.post-launch-notice {
+  background: #eef5ee;
+  border-color: #b8d3bd;
+  color: #1f5a40;
+  font-weight: 800;
+}
+
+
+.contact-chip {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.contact-chip strong {
+  font-size: 0.78rem;
+}
+
+.contact-chip button {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #b8d3bd;
+  border-radius: 999px;
+  color: #1f5a40;
+  display: inline-flex;
+  height: 24px;
+  justify-content: center;
+  padding: 0;
+  width: 24px;
+}
+
 .post-copyarea {
   min-height: 620px;
   white-space: pre-wrap;
