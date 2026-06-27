@@ -352,6 +352,62 @@ h2 {
   padding: 8px;
 }
 
+
+.platform-mark {
+  align-items: center;
+  background: #26383c;
+  border-radius: 8px;
+  color: #ffffff;
+  display: inline-flex;
+  font-size: 0.76rem;
+  font-weight: 900;
+  height: 26px;
+  justify-content: center;
+  letter-spacing: 0;
+  line-height: 1;
+  min-width: 26px;
+  padding: 0 6px;
+}
+
+.platform-mark.x {
+  background: #111111;
+}
+
+.platform-mark.linkedin {
+  background: #0a66c2;
+  font-family: Arial, sans-serif;
+  font-size: 0.82rem;
+  text-transform: lowercase;
+}
+
+.platform-mark.bluesky {
+  background: #1185fe;
+}
+
+.platform-mark.threads {
+  background: #101010;
+}
+
+.platform-mark.facebook {
+  background: #1877f2;
+  font-family: Arial, sans-serif;
+  font-size: 1.05rem;
+  padding-bottom: 1px;
+}
+
+.platform-mark.reddit {
+  background: #ff4500;
+  color: #ffffff;
+}
+
+.platform-mark.email {
+  background: #6c7a62;
+}
+
+.platform-mark.copy {
+  background: #2f6850;
+}
+
 .platform-launch-dock button:first-of-type {
   background: #26383c;
   border-color: #26383c;

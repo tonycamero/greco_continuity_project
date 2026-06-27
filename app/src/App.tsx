@@ -6,7 +6,6 @@ import {
   Clock3,
   Clipboard,
   Send,
-  Share2,
   ExternalLink,
   Filter,
   Globe2,
@@ -368,11 +367,17 @@ function relationshipForContact(contact: string, rows: Relationship[]): Relation
 }
 
 function platformIcon(platform: PublishingPlatform) {
-  if (platform === "X") return <X size={17} />;
-  if (platform === "LinkedIn") return <Linkedin size={17} />;
-  if (platform === "Email") return <Mail size={17} />;
-  if (platform === "Copy") return <Clipboard size={17} />;
-  return <Share2 size={17} />;
+  const marks: Record<PublishingPlatform, string> = {
+    X: "X",
+    LinkedIn: "in",
+    Bluesky: "BS",
+    Threads: "Th",
+    Facebook: "f",
+    Reddit: "r/",
+    Email: "@",
+    Copy: "cp"
+  };
+  return <span className={`platform-mark ${platform.toLowerCase()}`} aria-hidden="true">{marks[platform]}</span>;
 }
 
 export function App() {
