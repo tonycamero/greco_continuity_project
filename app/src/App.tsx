@@ -4,11 +4,13 @@ import {
   ArrowUpRight,
   CheckCircle2,
   Clock3,
+  Clipboard,
   ExternalLink,
   Filter,
   Globe2,
   Linkedin,
   Mail,
+  Megaphone,
   MessageSquare,
   Mic2,
   RadioTower,
@@ -136,6 +138,26 @@ type ReconResponse = {
     linkedin_requires_author_urn: boolean;
   };
   errors: Array<{ target_name: string; errors: string[] }>;
+};
+
+type PublishingContact = {
+  "Post ID": string;
+  Theme: string;
+  "Primary Platform": string;
+  "Suggested Contacts": string;
+  "Why Notify": string;
+  "Notification Angle": string;
+};
+
+type PublishingDay = {
+  id: string;
+  day: string;
+  platform: "LinkedIn" | "X";
+  title: string;
+  postId: string;
+  theme: string;
+  sourceAssets: string[];
+  body: string;
 };
 
 const signalLibrary: Signal[] = [
@@ -267,7 +289,37 @@ function formatDelay(ms: number): string {
   return remainder ? `${hours}h ${remainder}m` : `${hours}h`;
 }
 
+function parsePublishingQueue(markdown: string): PublishingDay[] {
+  return markdown
+    .split(/\n(?=## Day \d+ - )/g)
+    .filter((section) => section.startsWith("## Day "))
+    .map((section) => {
+      const heading = section.match(/^## (Day \d+) - (LinkedIn|X Thread)/);
+      const postId = section.match(/Post ID:\s*(.+)/)?.[1].trim() ?? "";
+      const theme = section.match(/Theme:\s*(.+)/)?.[1].trim() ?? "";
+      const sourceBlock = section.match(/Source assets:\n\n([\s\S]*?)\n\n(?:Post|Thread):/);
+      const sourceAssets = sourceBlock?.[1]
+        .split("\n")
+        .map((line) => line.replace(/^-\s*/, "").replace(/`/g, "").trim())
+        .filter(Boolean) ?? [];
+      const body = (section.match(/(?:Post|Thread):\n\n([\s\S]*?)\n\nSuggested notifications:/)?.[1] ?? section)
+        .trim();
+      const platform = heading?.[2] === "X Thread" ? "X" : "LinkedIn";
+      return {
+        id: postId || heading?.[1] || section.slice(0, 16),
+        day: heading?.[1] ?? "Day",
+        platform,
+        title: `${heading?.[1] ?? "Day"} · ${theme}`,
+        postId,
+        theme,
+        sourceAssets,
+        body
+      };
+    });
+}
+
 export function App() {
+  const [page, setPage] = useState<"pipeline" | "publishing">("pipeline");
   const [relationships, setRelationships] = useState<Relationship[]>([]);
   const [query, setQuery] = useState("");
   const [tier, setTier] = useState("Tier 1");
@@ -286,6 +338,11 @@ export function App() {
   const [manualNotice, setManualNotice] = useState("");
   const [isCapturingManual, setIsCapturingManual] = useState(false);
   const [mode, setMode] = useState<"Recon" | "Draft" | "Approve" | "Manual">("Recon");
+  const [publishingDays, setPublishingDays] = useState<PublishingDay[]>([]);
+  const [publishingContacts, setPublishingContacts] = useState<PublishingContact[]>([]);
+  const [strategyMarkdown, setStrategyMarkdown] = useState("");
+  const [selectedPostId, setSelectedPostId] = useState("");
+  const [copyNotice, setCopyNotice] = useState("");
 
   useEffect(() => {
     Papa.parse<Relationship>("/data/greco_relationships_hydrated.csv", {
@@ -315,6 +372,33 @@ export function App() {
     fetchExecutionPolicies();
   }, []);
 
+  useEffect(() => {
+    async function loadPublishingSystem() {
+      const [queueResponse, contactsResponse, strategyResponse] = await Promise.all([
+        fetch("/publishing_system/daily_publish_queue.md"),
+        fetch("/publishing_system/contact_notification_matrix.csv"),
+        fetch("/publishing_system/posting_strategy.md")
+      ]);
+      const queueMarkdown = await queueResponse.text();
+      const days = parsePublishingQueue(queueMarkdown);
+      setPublishingDays(days);
+      setSelectedPostId((current) => current || days[0]?.postId || "");
+
+      const contactsCsv = await contactsResponse.text();
+      const parsedContacts = Papa.parse<PublishingContact>(contactsCsv, {
+        header: true,
+        skipEmptyLines: true
+      });
+      setPublishingContacts(parsedContacts.data.filter((row) => row["Post ID"]));
+
+      setStrategyMarkdown(await strategyResponse.text());
+    }
+
+    loadPublishingSystem().catch(() => {
+      setCopyNotice("Publishing system files could not be loaded.");
+    });
+  }, []);
+
   const filtered = useMemo(() => {
     return relationships
       .filter((row) => (tier === "All" ? true : row.priority_tier === tier))
@@ -337,6 +421,20 @@ export function App() {
     .sort((a, b) => scoreRelationship(b) - scoreRelationship(a));
   const selectedSocialIndex = selected ? socialTargets.findIndex((row) => row.name === selected.name) : -1;
   const socialQueueLabel = selectedSocialIndex >= 0 ? `${selectedSocialIndex + 1}/${socialTargets.length}` : `${socialTargets.length} profiles`;
+  const selectedPublishingDay = publishingDays.find((post) => post.postId === selectedPostId) ?? publishingDays[0];
+  const selectedPublishingContact = publishingContacts.find((row) => row["Post ID"] === selectedPublishingDay?.postId);
+  const publishingProgress = selectedPublishingDay
+    ? `${publishingDays.findIndex((post) => post.postId === selectedPublishingDay.postId) + 1}/${publishingDays.length}`
+    : "0/0";
+
+  async function copyText(label: string, text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyNotice(`${label} copied.`);
+    } catch {
+      setCopyNotice("Copy failed. Select the text and copy manually.");
+    }
+  }
 
   async function openChannelRoute(row: Relationship, label: string, key: keyof Relationship, url: string) {
     const channel = throttledChannels[key as string];
@@ -450,6 +548,161 @@ export function App() {
     }
   }
 
+  if (page === "publishing") {
+    const contactList = selectedPublishingContact?.["Suggested Contacts"].split(";").map((item) => item.trim()).filter(Boolean) ?? [];
+    const notificationText = selectedPublishingContact
+      ? `Relevant contacts: ${selectedPublishingContact["Suggested Contacts"]}\n\nWhy notify: ${selectedPublishingContact["Why Notify"]}\n\nAngle: ${selectedPublishingContact["Notification Angle"]}`
+      : "";
+
+    return (
+      <main className="shell publishing-shell">
+        <header className="topbar">
+          <div>
+            <p className="eyebrow">Greco Continuity OS</p>
+            <h1>Public Signal Publishing Desk</h1>
+          </div>
+          <div className="status-strip" aria-label="Publishing status">
+            <span><Megaphone size={16} /> {publishingDays.length || "..."} daily posts</span>
+            <span><Clipboard size={16} /> Copy/paste ready</span>
+            <button className="topbar-action" onClick={() => setPage("pipeline")}>
+              <ArrowUpRight size={16} />
+              Recon Pipeline
+            </button>
+          </div>
+        </header>
+
+        <section className="publish-brief" aria-label="Publishing logic">
+          <div>
+            <p className="eyebrow">Category</p>
+            <strong>Regenerative Coordination Economy</strong>
+            <span>Public market umbrella</span>
+          </div>
+          <div>
+            <p className="eyebrow">Mechanism</p>
+            <strong>Trust-Mediated Exchange</strong>
+            <span>Greco contribution inside the category</span>
+          </div>
+          <div>
+            <p className="eyebrow">Bridge Line</p>
+            <strong>Community without exchange is fragile.</strong>
+            <span>Reusable category-forming phrase</span>
+          </div>
+          <div>
+            <p className="eyebrow">Current Post</p>
+            <strong>{selectedPublishingDay ? publishingProgress : "Loading"}</strong>
+            <span>{selectedPublishingDay?.platform ?? "Publishing queue"}</span>
+          </div>
+        </section>
+
+        <section className="publishing-workspace">
+          <aside className="panel publishing-list-panel">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Daily Queue</p>
+                <h2>Choose Post</h2>
+              </div>
+              <Megaphone size={18} />
+            </div>
+
+            <div className="publishing-list">
+              {publishingDays.map((post) => (
+                <button
+                  key={post.postId}
+                  className={`publishing-row ${selectedPublishingDay?.postId === post.postId ? "selected" : ""}`}
+                  onClick={() => setSelectedPostId(post.postId)}
+                >
+                  <span className={`platform-pill ${post.platform.toLowerCase()}`}>{post.platform}</span>
+                  <span>
+                    <strong>{post.day}</strong>
+                    <small>{post.theme}</small>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </aside>
+
+          <section className="panel publish-copy-panel">
+            {selectedPublishingDay ? (
+              <>
+                <div className="panel-header">
+                  <div>
+                    <p className="eyebrow">{selectedPublishingDay.platform} · {selectedPublishingDay.postId}</p>
+                    <h2>{selectedPublishingDay.theme}</h2>
+                  </div>
+                  <button className="copy-button" onClick={() => copyText("Post", selectedPublishingDay.body)}>
+                    <Clipboard size={16} />
+                    Copy Post
+                  </button>
+                </div>
+
+                <div className="source-asset-row">
+                  {selectedPublishingDay.sourceAssets.map((asset) => (
+                    <span key={asset}>{asset.replace("../", "")}</span>
+                  ))}
+                </div>
+
+                <textarea className="post-copyarea" value={selectedPublishingDay.body} readOnly aria-label="Selected publishing post" />
+
+                <div className="copy-footer">
+                  <button onClick={() => copyText("Post and notification packet", `${selectedPublishingDay.body}\n\n---\n\n${notificationText}`)}>
+                    <Clipboard size={16} />
+                    Copy Post + Notify Packet
+                  </button>
+                  {copyNotice && <span>{copyNotice}</span>}
+                </div>
+              </>
+            ) : (
+              <div className="empty-state">
+                <strong>Publishing files are loading.</strong>
+                <span>The page reads from app/public/publishing_system.</span>
+              </div>
+            )}
+          </section>
+
+          <aside className="panel notification-panel">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Decision Support</p>
+                <h2>Notify List</h2>
+              </div>
+              <button className="copy-icon-button" onClick={() => copyText("Notification packet", notificationText)} aria-label="Copy notification packet">
+                <Clipboard size={16} />
+              </button>
+            </div>
+
+            {selectedPublishingContact ? (
+              <div className="notification-stack">
+                <div className="notify-card">
+                  <span className="label">Why this group</span>
+                  <p>{selectedPublishingContact["Why Notify"]}</p>
+                </div>
+                <div className="notify-card">
+                  <span className="label">Notification angle</span>
+                  <p>{selectedPublishingContact["Notification Angle"]}</p>
+                </div>
+                <div className="contact-chip-list">
+                  {contactList.map((contact) => (
+                    <span key={contact}>{contact}</span>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="empty-state">
+                <strong>No contact matrix row selected.</strong>
+                <span>Choose a post from the queue.</span>
+              </div>
+            )}
+
+            <div className="strategy-card">
+              <p className="eyebrow">Operating Logic</p>
+              <textarea value={strategyMarkdown} readOnly aria-label="Publishing strategy" />
+            </div>
+          </aside>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="shell">
       <header className="topbar">
@@ -461,6 +714,10 @@ export function App() {
           <span><UserRound size={16} /> {relationships.length || "..."} records</span>
           <span><ShieldCheck size={16} /> Human gated</span>
           <span><Sparkles size={16} /> Codex executed</span>
+          <button className="topbar-action" onClick={() => setPage("publishing")}>
+            <Megaphone size={16} />
+            Publishing Desk
+          </button>
         </div>
       </header>
 

@@ -89,6 +89,30 @@ h2 {
   white-space: nowrap;
 }
 
+.topbar-action,
+.copy-button,
+.copy-icon-button {
+  align-items: center;
+  background: #26383c;
+  border: 0;
+  border-radius: 8px;
+  color: #ffffff;
+  display: inline-flex;
+  font: inherit;
+  font-weight: 800;
+  gap: 8px;
+  min-height: 40px;
+  padding: 9px 12px;
+  white-space: nowrap;
+}
+
+.copy-icon-button {
+  height: 40px;
+  justify-content: center;
+  padding: 0;
+  width: 40px;
+}
+
 .metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -172,6 +196,181 @@ h2 {
   grid-template-columns: minmax(280px, 0.85fr) minmax(440px, 1.5fr) minmax(300px, 0.9fr);
   margin: 0 auto;
   max-width: 1500px;
+}
+
+.publish-brief {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1.1fr 1.1fr 1.4fr 0.7fr;
+  margin: 0 auto 18px;
+  max-width: 1500px;
+}
+
+.publish-brief div {
+  background: #26383c;
+  border-radius: 8px;
+  color: #f9f5ec;
+  min-height: 92px;
+  padding: 16px;
+}
+
+.publish-brief .eyebrow {
+  color: #c9d8c9;
+}
+
+.publish-brief strong {
+  display: block;
+  font-size: 1.05rem;
+  line-height: 1.3;
+  margin-bottom: 8px;
+}
+
+.publish-brief span {
+  color: #d5ded1;
+  display: block;
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+
+.publishing-workspace {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(250px, 0.7fr) minmax(480px, 1.55fr) minmax(320px, 0.9fr);
+  margin: 0 auto;
+  max-width: 1500px;
+}
+
+.publishing-list {
+  display: grid;
+  gap: 8px;
+}
+
+.publishing-row {
+  align-items: center;
+  background: #f8f7f3;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #172226;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 78px minmax(0, 1fr);
+  min-height: 74px;
+  padding: 10px;
+  text-align: left;
+}
+
+.publishing-row.selected {
+  background: #eef5ee;
+  border-color: #6c9a7a;
+}
+
+.publishing-row strong,
+.publishing-row small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.publishing-row small {
+  color: #63706a;
+  font-size: 0.78rem;
+  margin-top: 4px;
+}
+
+.platform-pill {
+  align-items: center;
+  background: #26383c;
+  border-radius: 6px;
+  color: #ffffff;
+  display: inline-flex;
+  font-size: 0.75rem;
+  font-weight: 800;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 8px;
+}
+
+.platform-pill.linkedin {
+  background: #2f6850;
+}
+
+.source-asset-row,
+.contact-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 12px;
+}
+
+.source-asset-row span,
+.contact-chip-list span {
+  background: #dceadf;
+  border-radius: 999px;
+  color: #1f5a40;
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 6px 9px;
+}
+
+.post-copyarea {
+  min-height: 620px;
+  white-space: pre-wrap;
+}
+
+.copy-footer {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.copy-footer button {
+  align-items: center;
+  background: #2f6850;
+  border: 0;
+  border-radius: 8px;
+  color: #ffffff;
+  display: inline-flex;
+  font: inherit;
+  font-weight: 800;
+  gap: 8px;
+  min-height: 42px;
+  padding: 9px 12px;
+}
+
+.copy-footer span {
+  color: #1f5a40;
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.notification-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.notify-card,
+.strategy-card {
+  background: #f8f7f3;
+  border: 1px solid #d8d4ca;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.notify-card p {
+  color: #34413d;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.strategy-card {
+  margin-top: 14px;
+}
+
+.strategy-card textarea {
+  min-height: 340px;
 }
 
 .panel {
@@ -915,9 +1114,14 @@ textarea {
     grid-template-columns: 1fr;
   }
 
+  .publishing-workspace {
+    grid-template-columns: 1fr;
+  }
+
   .relationship-brief,
   .approval-grid,
-  .metrics {
+  .metrics,
+  .publish-brief {
     grid-template-columns: 1fr 1fr;
   }
 }
@@ -928,6 +1132,7 @@ textarea {
   }
 
   .metrics,
+  .publish-brief,
   .recon-toolbar,
   .relationship-brief,
   .approval-grid {
