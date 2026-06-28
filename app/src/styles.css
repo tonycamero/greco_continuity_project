@@ -198,6 +198,12 @@ h2 {
   max-width: 1500px;
 }
 
+.target-drawer-toggle,
+.target-drawer-backdrop,
+.drawer-close {
+  display: none;
+}
+
 .publish-brief {
   display: grid;
   gap: 12px;
@@ -1433,6 +1439,83 @@ textarea {
 
   .workspace {
     grid-template-columns: 1fr;
+  }
+
+  .target-drawer-toggle {
+    align-items: center;
+    background: #26383c;
+    border: 1px solid #dceadf;
+    border-radius: 999px;
+    bottom: 18px;
+    box-shadow: 0 12px 30px rgba(23, 34, 38, 0.26);
+    color: #ffffff;
+    display: inline-flex;
+    font: inherit;
+    font-weight: 900;
+    gap: 8px;
+    left: 16px;
+    min-height: 48px;
+    padding: 0 14px;
+    position: fixed;
+    z-index: 35;
+  }
+
+  .target-drawer-toggle span {
+    align-items: center;
+    background: #ffffff;
+    border-radius: 999px;
+    color: #1f5a40;
+    display: inline-flex;
+    font-size: 0.78rem;
+    height: 26px;
+    justify-content: center;
+    min-width: 26px;
+    padding: 0 7px;
+  }
+
+  .target-drawer-backdrop {
+    background: rgba(23, 34, 38, 0.36);
+    border: 0;
+    display: block;
+    inset: 0;
+    position: fixed;
+    z-index: 38;
+  }
+
+  .relationship-panel {
+    bottom: 0;
+    left: 0;
+    max-height: 86vh;
+    overflow: auto;
+    position: fixed;
+    right: 0;
+    transform: translateY(calc(100% + 20px));
+    transition: transform 180ms ease;
+    z-index: 40;
+  }
+
+  .relationship-panel.open {
+    transform: translateY(0);
+  }
+
+  .drawer-close {
+    background: #26383c;
+    border: 0;
+    border-radius: 999px;
+    color: #ffffff;
+    display: inline-flex;
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 900;
+    padding: 7px 10px;
+  }
+
+  .cockpit {
+    order: 1;
+  }
+
+  .action-panel {
+    order: 2;
   }
 
   .publishing-workspace {

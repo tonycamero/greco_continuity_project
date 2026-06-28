@@ -501,6 +501,7 @@ export function App() {
   const [reconError, setReconError] = useState("");
   const [channelPolicies, setChannelPolicies] = useState<Record<string, ChannelStatus>>({});
   const [channelNotice, setChannelNotice] = useState("");
+  const [targetDrawerOpen, setTargetDrawerOpen] = useState(false);
   const [mode, setMode] = useState<"Signal" | "Sensemaking" | "Response" | "Approve">("Signal");
   const [publishingDays, setPublishingDays] = useState<PublishingDay[]>([]);
   const [publishingContacts, setPublishingContacts] = useState<PublishingContact[]>([]);
@@ -916,14 +917,22 @@ export function App() {
         </button>
       </section>
 
+      <button className="target-drawer-toggle" onClick={() => setTargetDrawerOpen(true)} aria-expanded={targetDrawerOpen} aria-controls="target-drawer">
+        <UserRound size={17} />
+        Targets
+        <span>{filtered.length}</span>
+      </button>
+      {targetDrawerOpen && <button className="target-drawer-backdrop" onClick={() => setTargetDrawerOpen(false)} aria-label="Close target drawer" />}
+
       <section className="workspace">
-        <aside className="panel relationship-panel">
+        <aside id="target-drawer" className={`panel relationship-panel ${targetDrawerOpen ? "open" : ""}`}>
           <div className="panel-header">
             <div>
               <p className="eyebrow">Today</p>
               <h2>Highest-Leverage Moves</h2>
             </div>
             <Filter size={18} />
+            <button className="drawer-close" onClick={() => setTargetDrawerOpen(false)} aria-label="Close target drawer">Close</button>
           </div>
 
           <label className="searchbox">
@@ -951,6 +960,7 @@ export function App() {
                         setSelectedName(signal.target_name);
                         setSelectedFreshSignalId(signal.id);
                         setMode("Signal");
+                        setTargetDrawerOpen(false);
                       }}
                     >
                       <span>
@@ -971,7 +981,7 @@ export function App() {
               <button
                 key={row.name}
                 className={`relationship-row ${selected?.name === row.name ? "selected" : ""}`}
-                onClick={() => setSelectedName(row.name)}
+                onClick={() => { setSelectedName(row.name); setTargetDrawerOpen(false); }}
               >
                 <span className="rank">{row.rank || "OS"}</span>
                 <span>
