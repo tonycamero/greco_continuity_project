@@ -1011,13 +1011,6 @@ export function App() {
               </div>
             </div>
 
-            <div className="mode-tabs" role="group" aria-label="Workflow mode">
-              {(["Signal", "Sensemaking", "Response", "Approve"] as const).map((item) => (
-                <button key={item} className={mode === item ? "active" : ""} onClick={() => setMode(item)}>
-                  {item}
-                </button>
-              ))}
-            </div>
 
             {(() => {
               const narrative = narrativeCardFor(selected, selectedFreshSignal, selectedSignal);
@@ -1042,6 +1035,14 @@ export function App() {
                 </div>
               );
             })()}
+
+            <div className="mode-tabs" role="group" aria-label="Workflow mode">
+              {(["Signal", "Sensemaking", "Response", "Approve"] as const).map((item) => (
+                <button key={item} className={mode === item ? "active" : ""} onClick={() => setMode(item)}>
+                  {item}
+                </button>
+              ))}
+            </div>
 
             {mode === "Signal" && selectedFreshSignal && (
               <div className="intelligence-stack">
