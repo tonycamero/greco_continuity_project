@@ -1080,6 +1080,80 @@ a.signal {
   padding: 10px 12px;
 }
 
+.narrative-card {
+  background: #eef5ee;
+  border: 1px solid #b8d3bd;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 12px;
+  padding: 12px;
+}
+
+.narrative-card div,
+.sensemaking-card {
+  background: #fbfaf7;
+  border: 1px solid #d8d4ca;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.narrative-card strong {
+  color: #172226;
+  display: block;
+  line-height: 1.35;
+  margin-top: 5px;
+}
+
+.narrative-card p,
+.sensemaking-card p {
+  color: #34413d;
+  line-height: 1.45;
+  margin: 6px 0 0;
+}
+
+.sensemaking-surface {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.sensemaking-card.wide,
+.judgment-banner {
+  grid-column: 1 / -1;
+}
+
+.sensemaking-card.restraint {
+  background: #fff8e7;
+  border-color: #e3cf96;
+}
+
+.judgment-banner {
+  align-items: center;
+  background: #26383c;
+  border-radius: 8px;
+  color: #ffffff;
+  display: flex;
+  gap: 12px;
+  padding: 14px;
+}
+
+.judgment-banner svg {
+  color: #dceadf;
+  flex: 0 0 auto;
+}
+
+.judgment-banner strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.judgment-banner p {
+  color: #eef5ee;
+  line-height: 1.4;
+  margin: 0;
+}
 .draft-box {
   display: grid;
   gap: 10px;

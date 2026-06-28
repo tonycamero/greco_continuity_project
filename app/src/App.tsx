@@ -20,7 +20,6 @@ import {
   Tags,
   ThumbsUp,
   UserRound,
-  X
 } from "lucide-react";
 
 type Relationship = {
@@ -276,6 +275,51 @@ function draftForFreshSignal(row: Relationship, signal: FreshSignal): string {
   return `This caught my attention because it sits near ${keywords}. I am increasingly convinced the next economic question is not only money, but how communities coordinate trust, contribution, and exchange without surrendering the relationship layer.`;
 }
 
+function sensemakingFor(row: Relationship, freshSignal: FreshSignal | undefined, fallbackSignal: Signal) {
+  const title = freshSignal?.title || fallbackSignal.title;
+  const summary = freshSignal?.summary || freshSignal?.intelligence_summary || fallbackSignal.angle;
+  const hook = row.current_hook || row.strategic_fit || fallbackSignal.angle;
+  const segment = row.ecosystem_segment || "movement builder";
+  const bridge = bridgeFor(row, freshSignal, fallbackSignal);
+  const response = freshSignal ? draftForFreshSignal(row, freshSignal) : draftFor(row, fallbackSignal);
+  const restraint = freshSignal?.risk === "High" || fallbackSignal.risk === "High"
+    ? "Observe or use a private/warm path first. High-risk signals need context before public interpretation."
+    : freshSignal?.recommended_action?.toLowerCase().includes("archive") || fallbackSignal.action === "Save"
+      ? "Wait and save the context. Understanding is the move unless the pattern repeats."
+      : "Use a question-first contribution. Avoid pitching the book until the bridge has been earned.";
+
+  return {
+    said: summary || title,
+    asking: `The underlying question appears to be how ${segment.toLowerCase()} can make trust, contribution, and accountability durable without depending entirely on platform or institutional authority.`,
+    matters: `This matters because ${row.name} sits near ${hook.toLowerCase()}. A clean bridge here could move the Greco workspace from monetary reform into a broader category conversation.`,
+    bridge,
+    response,
+    restraint
+  };
+}
+
+function bridgeFor(row: Relationship, freshSignal: FreshSignal | undefined, fallbackSignal: Signal): string {
+  const text = `${row.ecosystem_segment} ${row.current_hook} ${row.strategic_fit} ${freshSignal?.matched_keywords.join(" ") ?? ""} ${fallbackSignal.angle}`.toLowerCase();
+  if (text.includes("nihilism") || text.includes("trust collapse")) return "Financial Nihilism -> Institutional Trust -> Contribution -> Community Value";
+  if (text.includes("creator") || text.includes("ownership") || text.includes("audience")) return "Audience Ownership -> Contribution Memory -> Community Value Flow";
+  if (text.includes("public goods") || text.includes("refi") || text.includes("commons")) return "Public Goods -> Funding Limits -> Trust-Mediated Exchange";
+  if (text.includes("ai") || text.includes("identity") || text.includes("provenance")) return "AI Trust -> Provenance -> Authority -> Accountable Exchange";
+  return "Signal -> Coordination Tension -> Trust-Mediated Exchange";
+}
+
+function narrativeCardFor(row: Relationship, freshSignal: FreshSignal | undefined, fallbackSignal: Signal) {
+  const bridge = bridgeFor(row, freshSignal, fallbackSignal);
+  const categoryFit = row.ecosystem_segment || freshSignal?.matched_keywords.slice(0, 2).join(" / ") || "Regenerative Coordination Economy";
+  const posture = freshSignal?.risk === "High" || fallbackSignal.risk === "High"
+    ? "Observe first; use a warm private path if action is needed."
+    : "Question rather than assertion; advance understanding before advocacy.";
+  return {
+    currentNarrative: "Trust-Mediated Exchange",
+    bridge,
+    categoryFit,
+    posture
+  };
+}
 function followUpFor(row: Relationship): string[] {
   const invitation = row.likely_ask || "Invite into a Future of Civilization conversation";
   return [
@@ -457,13 +501,7 @@ export function App() {
   const [reconError, setReconError] = useState("");
   const [channelPolicies, setChannelPolicies] = useState<Record<string, ChannelStatus>>({});
   const [channelNotice, setChannelNotice] = useState("");
-  const [manualPlatform, setManualPlatform] = useState<"X" | "LinkedIn">("X");
-  const [manualUrl, setManualUrl] = useState("");
-  const [manualTitle, setManualTitle] = useState("");
-  const [manualText, setManualText] = useState("");
-  const [manualNotice, setManualNotice] = useState("");
-  const [isCapturingManual, setIsCapturingManual] = useState(false);
-  const [mode, setMode] = useState<"Recon" | "Draft" | "Approve" | "Manual">("Recon");
+  const [mode, setMode] = useState<"Signal" | "Sensemaking" | "Response" | "Approve">("Signal");
   const [publishingDays, setPublishingDays] = useState<PublishingDay[]>([]);
   const [publishingContacts, setPublishingContacts] = useState<PublishingContact[]>([]);
   const [strategyMarkdown, setStrategyMarkdown] = useState("");
@@ -616,64 +654,6 @@ export function App() {
   }
 
 
-  function moveSocialTarget(direction: 1 | -1) {
-    if (!socialTargets.length) return;
-    const current = selectedSocialIndex >= 0 ? selectedSocialIndex : 0;
-    const next = (current + direction + socialTargets.length) % socialTargets.length;
-    setSelectedName(socialTargets[next].name);
-    setManualPlatform(socialTargets[next].x_url ? "X" : "LinkedIn");
-    setManualNotice("");
-    setMode("Manual");
-  }
-
-  async function captureManualSignal() {
-    if (!selected || !manualText.trim()) {
-      setManualNotice("Paste the post text or your field note before capturing.");
-      return;
-    }
-    setIsCapturingManual(true);
-    setManualNotice("");
-    try {
-      const response = await fetch("/api/recon/manual-signal", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          target_name: selected.name,
-          platform: manualPlatform,
-          url: manualUrl,
-          title: manualTitle,
-          text: manualText
-        })
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || `Manual capture returned ${response.status}`);
-      const signal = data.signal as FreshSignal;
-      setFreshRecon((current) => {
-        const existing = current?.signals ?? [];
-        const nextSignals = [signal, ...existing.filter((item) => item.id !== signal.id)];
-        return {
-          fetched_at: current?.fetched_at || new Date().toISOString(),
-          target_count: current?.target_count || 1,
-          signal_count: nextSignals.length,
-          request_rate_per_minute: current?.request_rate_per_minute,
-          source_status: current?.source_status,
-          errors: current?.errors || [],
-          signals: nextSignals
-        };
-      });
-      setSelectedFreshSignalId(signal.id);
-      setManualUrl("");
-      setManualTitle("");
-      setManualText("");
-      setManualNotice(`Captured and scored: ${signal.relevance_score}% relevance.`);
-      setMode("Recon");
-    } catch (error) {
-      setManualNotice(error instanceof Error ? error.message : "Manual capture failed.");
-    } finally {
-      setIsCapturingManual(false);
-    }
-  }
-
   async function fetchReliableSources() {
     setIsFetchingRecon(true);
     setReconError("");
@@ -685,7 +665,7 @@ export function App() {
       setSelectedFreshSignalId(data.signals[0]?.id ?? "");
       const firstHit = data.signals.find((signal) => relationships.some((row) => row.name === signal.target_name));
       if (firstHit) setSelectedName(firstHit.target_name);
-      setMode("Recon");
+      setMode("Signal");
     } catch (error) {
       setReconError(error instanceof Error ? error.message : "Recon fetch failed");
     } finally {
@@ -711,7 +691,7 @@ export function App() {
             <span><Clipboard size={16} /> Copy/paste ready</span>
             <button className="topbar-action" onClick={() => setPage("pipeline")}>
               <ArrowUpRight size={16} />
-              Recon Pipeline
+              Narrative Intelligence
             </button>
           </div>
         </header>
@@ -795,7 +775,7 @@ export function App() {
                 </div>
                 {shareDockOpen && (
                   <div className="platform-launch-dock" aria-label="Post this content to a platform">
-                    <span>Post to</span>
+                    <span>Share via</span>
                     {primaryPlatforms.map((platform) => (
                       <button key={platform} onClick={() => launchPlatformPost(selectedPublishingDay, platform)} title={`Copy and open ${platform}`} aria-label={`Copy and open ${platform}`}>
                         {platformIcon(platform)}
@@ -887,7 +867,7 @@ export function App() {
       <header className="topbar">
         <div>
           <p className="eyebrow">Greco Continuity OS</p>
-          <h1>Recon-to-Response Pipeline</h1>
+          <h1>Narrative Intelligence</h1>
         </div>
         <div className="status-strip" aria-label="Pipeline status">
           <span><UserRound size={16} /> {relationships.length || "..."} records</span>
@@ -921,7 +901,7 @@ export function App() {
 
       <section className="recon-toolbar" aria-label="Reliable source fetch">
         <div>
-          <p className="eyebrow">Morning Recon</p>
+          <p className="eyebrow">Signal Intake</p>
           <strong>{freshRecon ? `${freshRecon.signal_count} fresh signals from ${freshRecon.target_count} targets` : "Fetch reliable sources across all relationship records"}</strong>
           <span>
             {freshRecon
@@ -962,7 +942,7 @@ export function App() {
           <div className="relationship-list">
             {topFreshSignals.length > 0 && (
               <div className="morning-queue">
-                <p className="eyebrow">Fresh Signal Queue</p>
+                <p className="eyebrow">Highest-Leverage Signals</p>
                 {topFreshSignals.map((signal) => (
                   <div key={signal.id} className={`queue-item ${selectedFreshSignalId === signal.id ? "selected" : ""}`}>
                     <button
@@ -970,7 +950,7 @@ export function App() {
                       onClick={() => {
                         setSelectedName(signal.target_name);
                         setSelectedFreshSignalId(signal.id);
-                        setMode("Recon");
+                        setMode("Signal");
                       }}
                     >
                       <span>
@@ -1032,14 +1012,38 @@ export function App() {
             </div>
 
             <div className="mode-tabs" role="group" aria-label="Workflow mode">
-              {(["Recon", "Manual", "Draft", "Approve"] as const).map((item) => (
+              {(["Signal", "Sensemaking", "Response", "Approve"] as const).map((item) => (
                 <button key={item} className={mode === item ? "active" : ""} onClick={() => setMode(item)}>
                   {item}
                 </button>
               ))}
             </div>
 
-            {mode === "Recon" && selectedFreshSignal && (
+            {(() => {
+              const narrative = narrativeCardFor(selected, selectedFreshSignal, selectedSignal);
+              return (
+                <div className="narrative-card">
+                  <div>
+                    <span className="label"><Sparkles size={14} /> Current Narrative</span>
+                    <strong>{narrative.currentNarrative}</strong>
+                  </div>
+                  <div>
+                    <span className="label"><ArrowUpRight size={14} /> Bridge</span>
+                    <p>{narrative.bridge}</p>
+                  </div>
+                  <div>
+                    <span className="label"><Tags size={14} /> Category Fit</span>
+                    <p>{narrative.categoryFit}</p>
+                  </div>
+                  <div>
+                    <span className="label"><ShieldCheck size={14} /> Recommended Posture</span>
+                    <p>{narrative.posture}</p>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {mode === "Signal" && selectedFreshSignal && (
               <div className="intelligence-stack">
                 <div className="intel-card primary">
                   <span className="signal-top">
@@ -1097,14 +1101,14 @@ export function App() {
               </div>
             )}
 
-            {mode === "Recon" && freshRecon && !selectedFreshSignal && (
+            {mode === "Signal" && freshRecon && !selectedFreshSignal && (
               <div className="empty-state">
                 <strong>No fresh reliable-source signal for this target yet.</strong>
-                <span>Use the execution buttons for manual recon, or fetch again after more sources are added.</span>
+                <span>Use the engagement surface for manual observation, or fetch again after more sources are added.</span>
               </div>
             )}
 
-            {mode === "Recon" && !freshRecon && !selectedFreshSignal && (
+            {mode === "Signal" && !freshRecon && !selectedFreshSignal && (
               <div className="signals">
                 {signalLibrary.map((signal) => (
                   <button
@@ -1125,71 +1129,50 @@ export function App() {
 
 
 
-            {mode === "Manual" && (
-              <div className="manual-recon">
-                <div className="manual-header">
-                  <div>
-                    <p className="eyebrow">Manual Social Recon</p>
-                    <h3>{selected.name}</h3>
-                    <span>{socialQueueLabel} · open one property, inspect like a human, capture only clean signals.</span>
+            {mode === "Sensemaking" && (() => {
+              const sensemaking = sensemakingFor(selected, selectedFreshSignal, selectedSignal);
+              return (
+                <div className="sensemaking-surface">
+                  <div className="sensemaking-card wide">
+                    <span className="label"><MessageSquare size={14} /> What they said</span>
+                    <p>{sensemaking.said}</p>
                   </div>
-                  <div className="manual-nav">
-                    <button onClick={() => moveSocialTarget(-1)}>Previous</button>
-                    <button onClick={() => moveSocialTarget(1)}>Next</button>
+                  <div className="sensemaking-card">
+                    <span className="label"><Search size={14} /> What they are really asking</span>
+                    <p>{sensemaking.asking}</p>
+                  </div>
+                  <div className="sensemaking-card">
+                    <span className="label"><ShieldCheck size={14} /> Why it matters</span>
+                    <p>{sensemaking.matters}</p>
+                  </div>
+                  <div className="sensemaking-card">
+                    <span className="label"><ArrowUpRight size={14} /> Bridge</span>
+                    <p>{sensemaking.bridge}</p>
+                  </div>
+                  <div className="sensemaking-card">
+                    <span className="label"><ThumbsUp size={14} /> Suggested response</span>
+                    <p>{sensemaking.response}</p>
+                  </div>
+                  <div className="sensemaking-card wide restraint">
+                    <span className="label"><Clock3 size={14} /> Restraint note</span>
+                    <p>{sensemaking.restraint}</p>
                   </div>
                 </div>
-
-                <div className="manual-routes">
-                  {selected.x_url ? <button onClick={() => openChannelRoute(selected, "X", "x_url", selected.x_url)}><PropertyIcon name="X" /> Open X</button> : <span>X missing</span>}
-                  {selected.linkedin_url ? <button onClick={() => openChannelRoute(selected, "LinkedIn", "linkedin_url", selected.linkedin_url)}><PropertyIcon name="LinkedIn" /> Open LinkedIn</button> : <span>LinkedIn missing</span>}
-                </div>
-
-                <div className="capture-grid">
-                  <label>
-                    <span>Platform</span>
-                    <select value={manualPlatform} onChange={(event) => setManualPlatform(event.target.value as "X" | "LinkedIn")}>
-                      <option value="X">X</option>
-                      <option value="LinkedIn">LinkedIn</option>
-                    </select>
-                  </label>
-                  <label>
-                    <span>Post URL</span>
-                    <input value={manualUrl} onChange={(event) => setManualUrl(event.target.value)} placeholder="Paste the post URL when available" />
-                  </label>
-                  <label className="wide">
-                    <span>Short title</span>
-                    <input value={manualTitle} onChange={(event) => setManualTitle(event.target.value)} placeholder="Optional title for the signal" />
-                  </label>
-                  <label className="wide">
-                    <span>Post text or field note</span>
-                    <textarea value={manualText} onChange={(event) => setManualText(event.target.value)} placeholder="Paste the relevant post text, or write a short note about why this profile/post matters." />
-                  </label>
-                </div>
-
-                <div className="manual-actions">
-                  <button onClick={captureManualSignal} disabled={isCapturingManual}>
-                    <Sparkles size={16} />
-                    {isCapturingManual ? "Scoring..." : "Capture + Score Signal"}
-                  </button>
-                  <button onClick={() => moveSocialTarget(1)}>No Clean Signal, Next</button>
-                </div>
-                {manualNotice && <p className="manual-notice">{manualNotice}</p>}
-              </div>
-            )}
-
-            {mode === "Draft" && (
+              );
+            })()}
+            {mode === "Response" && (
               <div className="draft-box">
                 <div className="draft-meta">
                   <span>
                     <ThumbsUp size={14} />
-                    Proposed action: {selectedFreshSignal?.recommended_action || selectedSignal.action}
+                    Recommended response: {selectedFreshSignal?.recommended_action || selectedSignal.action}
                   </span>
                   <span>Risk: {selectedFreshSignal?.risk || selectedSignal.risk}</span>
                 </div>
                 <textarea
                   value={selectedFreshSignal ? draftForFreshSignal(selected, selectedFreshSignal) : draftFor(selected, selectedSignal)}
                   readOnly
-                  aria-label="Draft response"
+                  aria-label="Prepared response"
                 />
                 {selectedFreshSignal?.owned_post_seed && (
                   <div className="owned-post-seed">
@@ -1208,6 +1191,13 @@ export function App() {
 
             {mode === "Approve" && (
               <div className="approval-grid">
+                <div className="judgment-banner">
+                  <ShieldCheck size={22} />
+                  <div>
+                    <strong>Human Judgment Required</strong>
+                    <p>The system prepares context, options, and risk. The human decides whether to respond, wait, or deepen understanding first.</p>
+                  </div>
+                </div>
                 <div className="approval-card">
                   <CheckCircle2 size={22} />
                   <strong>Human gate</strong>
@@ -1215,8 +1205,8 @@ export function App() {
                 </div>
                 <div className="approval-card">
                   <ArrowUpRight size={22} />
-                  <strong>Execution</strong>
-                  <p>Codex can execute the approved browser action and log the receipt once platform access is available.</p>
+                  <strong>Prepared action</strong>
+                  <p>Codex can help carry out the approved browser action and log the receipt once platform access is available.</p>
                 </div>
                 {selectedFreshSignal?.follow_up_sequence?.length ? (
                   <div className="approval-card wide">
@@ -1239,7 +1229,7 @@ export function App() {
             <div className="panel-header">
               <div>
                 <p className="eyebrow">Channels</p>
-                <h2>Execution Surface</h2>
+                <h2>Engagement Surface</h2>
               </div>
               <span className="channel-count">{channelCount(selected)}</span>
             </div>
