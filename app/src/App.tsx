@@ -9,7 +9,6 @@ import {
   ExternalLink,
   Filter,
   Globe2,
-  Linkedin,
   Mail,
   Megaphone,
   MessageSquare,
@@ -212,14 +211,23 @@ const throttledChannels: Record<string, "x" | "linkedin"> = {
 };
 
 const platformFields = [
-  ["Website", "website", Globe2],
-  ["Contact", "contact_url", Mail],
-  ["LinkedIn", "linkedin_url", Linkedin],
-  ["X", "x_url", X],
-  ["Newsletter", "newsletter_url", MessageSquare],
-  ["Substack", "substack_url", MessageSquare],
-  ["YouTube", "youtube_url", RadioTower],
-  ["Podcast", "podcast_url", Mic2]
+  ["Website", "website"],
+  ["Contact", "contact_url"],
+  ["LinkedIn", "linkedin_url"],
+  ["X", "x_url"],
+  ["Bluesky", "bluesky_url"],
+  ["Mastodon", "mastodon_url"],
+  ["Instagram", "instagram_url"],
+  ["Threads", "threads_url"],
+  ["TikTok", "tiktok_url"],
+  ["YouTube", "youtube_url"],
+  ["Podcast", "podcast_url"],
+  ["Newsletter", "newsletter_url"],
+  ["Substack", "substack_url"],
+  ["GitHub", "github_url"],
+  ["Discord", "discord_or_community_url"],
+  ["Event", "event_url"],
+  ["Booking", "booking_or_speaker_url"]
 ] as const;
 
 function scoreRelationship(row: Relationship): number {
@@ -353,6 +361,68 @@ function platformCopyNote(platform: PublishingPlatform, post: PublishingDay): st
 
 const primaryPlatforms: PublishingPlatform[] = ["X", "LinkedIn", "Bluesky", "Threads", "Facebook", "Reddit", "Email", "Copy"];
 
+type PropertyIconName =
+  | "Website"
+  | "Contact"
+  | "Email"
+  | "LinkedIn"
+  | "X"
+  | "Bluesky"
+  | "Mastodon"
+  | "Instagram"
+  | "Threads"
+  | "TikTok"
+  | "YouTube"
+  | "Podcast"
+  | "Newsletter"
+  | "Substack"
+  | "GitHub"
+  | "Discord"
+  | "Event"
+  | "Booking"
+  | "RSS"
+  | "Copy";
+
+const propertyIconAssets: Partial<Record<PropertyIconName, string>> = {
+  X: "x",
+  LinkedIn: "linkedin",
+  Bluesky: "bluesky",
+  Threads: "threads",
+  YouTube: "youtube",
+  Substack: "substack",
+  GitHub: "github",
+  Instagram: "instagram",
+  TikTok: "tiktok",
+  Discord: "discord",
+  Mastodon: "mastodon"
+};
+
+function propertyNameFromSignal(platform: string): PropertyIconName {
+  const normalized = platform.toLowerCase();
+  if (normalized.includes("x")) return "X";
+  if (normalized.includes("linkedin")) return "LinkedIn";
+  if (normalized.includes("substack")) return "Substack";
+  if (normalized.includes("youtube")) return "YouTube";
+  if (normalized.includes("podcast")) return "Podcast";
+  if (normalized.includes("rss")) return "RSS";
+  return "Website";
+}
+
+function PropertyIcon({ name, className = "" }: { name: PropertyIconName; className?: string }) {
+  const assetName = propertyIconAssets[name];
+  if (assetName) {
+    return <img className={`platform-logo ${className}`.trim()} src={`/platform-icons/${assetName}.svg`} alt="" aria-hidden="true" />;
+  }
+  if (name === "Website") return <Globe2 size={17} />;
+  if (name === "Contact" || name === "Email") return <Mail size={17} />;
+  if (name === "Podcast") return <Mic2 size={17} />;
+  if (name === "Newsletter" || name === "RSS") return <MessageSquare size={17} />;
+  if (name === "Event") return <RadioTower size={17} />;
+  if (name === "Booking") return <Clock3 size={17} />;
+  if (name === "Copy") return <Clipboard size={17} />;
+  return <ExternalLink size={17} />;
+}
+
 function normalizedName(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
@@ -367,20 +437,11 @@ function relationshipForContact(contact: string, rows: Relationship[]): Relation
 }
 
 function platformIcon(platform: PublishingPlatform) {
-  const assetNames: Partial<Record<PublishingPlatform, string>> = {
-    X: "x",
-    LinkedIn: "linkedin",
-    Bluesky: "bluesky",
-    Threads: "threads",
-    Facebook: "facebook",
-    Reddit: "reddit"
-  };
-  const assetName = assetNames[platform];
-  if (assetName) {
-    return <img className="platform-logo" src={`/platform-icons/${assetName}.svg`} alt="" aria-hidden="true" />;
-  }
+  if (platform === "Facebook") return <img className="platform-logo" src="/platform-icons/facebook.svg" alt="" aria-hidden="true" />;
+  if (platform === "Reddit") return <img className="platform-logo" src="/platform-icons/reddit.svg" alt="" aria-hidden="true" />;
   if (platform === "Email") return <Mail size={18} />;
-  return <Clipboard size={18} />;
+  if (platform === "Copy") return <Clipboard size={18} />;
+  return <PropertyIcon name={platform} />;
 }
 
 export function App() {
@@ -409,6 +470,7 @@ export function App() {
   const [selectedPostId, setSelectedPostId] = useState("");
   const [copyNotice, setCopyNotice] = useState("");
   const [postLaunchNotice, setPostLaunchNotice] = useState("");
+  const [shareDockOpen, setShareDockOpen] = useState(false);
 
   useEffect(() => {
     Papa.parse<Relationship>("/data/greco_relationships_hydrated.csv", {
@@ -492,6 +554,11 @@ export function App() {
   const publishingProgress = selectedPublishingDay
     ? `${publishingDays.findIndex((post) => post.postId === selectedPublishingDay.postId) + 1}/${publishingDays.length}`
     : "0/0";
+
+  useEffect(() => {
+    setShareDockOpen(false);
+    setPostLaunchNotice("");
+  }, [selectedPostId]);
 
   async function copyText(label: string, text: string) {
     try {
@@ -689,7 +756,7 @@ export function App() {
                   className={`publishing-row ${selectedPublishingDay?.postId === post.postId ? "selected" : ""}`}
                   onClick={() => setSelectedPostId(post.postId)}
                 >
-                  <span className={`platform-pill ${post.platform.toLowerCase()}`}>{post.platform}</span>
+                  <span className={`platform-pill ${post.platform.toLowerCase()}`}><PropertyIcon name={post.platform} /> {post.platform}</span>
                   <span>
                     <strong>{post.day}</strong>
                     <small>{post.theme}</small>
@@ -719,28 +786,26 @@ export function App() {
                   ))}
                 </div>
 
-                <div className="post-launch-card">
-                  <div>
-                    <span className="label">Phone publishing</span>
-                    <p>{platformCopyNote(selectedPublishingDay.platform, selectedPublishingDay)}</p>
-                  </div>
-                  <button onClick={() => launchPlatformPost(selectedPublishingDay)}>
+                <div className="post-share-row">
+                  <button className="share-toggle" onClick={() => setShareDockOpen((current) => !current)} aria-expanded={shareDockOpen}>
                     <Send size={16} />
-                    Copy + Open {selectedPublishingDay.platform}
+                    Share
                   </button>
+                  <span>{platformCopyNote(selectedPublishingDay.platform, selectedPublishingDay)}</span>
                 </div>
+                {shareDockOpen && (
+                  <div className="platform-launch-dock" aria-label="Post this content to a platform">
+                    <span>Post to</span>
+                    {primaryPlatforms.map((platform) => (
+                      <button key={platform} onClick={() => launchPlatformPost(selectedPublishingDay, platform)} title={`Copy and open ${platform}`} aria-label={`Copy and open ${platform}`}>
+                        {platformIcon(platform)}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {postLaunchNotice && <p className="post-launch-notice">{postLaunchNotice}</p>}
 
                 <textarea className="post-copyarea" value={selectedPublishingDay.body} readOnly aria-label="Selected publishing post" />
-
-                <div className="platform-launch-dock" aria-label="Post this content to a platform">
-                  <span>Post to</span>
-                  {primaryPlatforms.map((platform) => (
-                    <button key={platform} onClick={() => launchPlatformPost(selectedPublishingDay, platform)} title={`Copy and open ${platform}`} aria-label={`Copy and open ${platform}`}>
-                      {platformIcon(platform)}
-                    </button>
-                  ))}
-                </div>
 
                 <div className="copy-footer">
                   <button onClick={() => copyText("Post and notification packet", `${selectedPublishingDay.body}\n\n---\n\n${notificationText}`)}>
@@ -787,12 +852,12 @@ export function App() {
                         <strong>{contact}</strong>
                         {contactRow?.x_url && (
                           <button onClick={() => openChannelRoute(contactRow, "X", "x_url", contactRow.x_url)} aria-label={`Open X for ${contact}`}>
-                            <X size={13} />
+                            <PropertyIcon name="X" />
                           </button>
                         )}
                         {contactRow?.linkedin_url && (
                           <button onClick={() => openChannelRoute(contactRow, "LinkedIn", "linkedin_url", contactRow.linkedin_url)} aria-label={`Open LinkedIn for ${contact}`}>
-                            <Linkedin size={13} />
+                            <PropertyIcon name="LinkedIn" />
                           </button>
                         )}
                       </span>
@@ -845,11 +910,11 @@ export function App() {
           <span>warm path only</span>
         </div>
         <div>
-          <strong>{relationships.filter((row) => row.x_url).length}</strong>
+          <strong><PropertyIcon name="X" /> {relationships.filter((row) => row.x_url).length}</strong>
           <span>X routes</span>
         </div>
         <div>
-          <strong>{relationships.filter((row) => row.linkedin_url).length}</strong>
+          <strong><PropertyIcon name="LinkedIn" /> {relationships.filter((row) => row.linkedin_url).length}</strong>
           <span>LinkedIn routes</span>
         </div>
       </section>
@@ -909,7 +974,7 @@ export function App() {
                       }}
                     >
                       <span>
-                        <strong>{signal.target_name}</strong>
+                        <strong><PropertyIcon name={propertyNameFromSignal(signal.platform)} /> {signal.target_name}</strong>
                         <small>{signal.title}</small>
                       </span>
                       <em>{signal.relevance_score}</em>
@@ -978,7 +1043,7 @@ export function App() {
               <div className="intelligence-stack">
                 <div className="intel-card primary">
                   <span className="signal-top">
-                    <strong>{selectedFreshSignal.platform} · {selectedFreshSignal.recommended_action}</strong>
+                    <strong><PropertyIcon name={propertyNameFromSignal(selectedFreshSignal.platform)} /> {selectedFreshSignal.platform} · {selectedFreshSignal.recommended_action}</strong>
                     <em>{selectedFreshSignal.relevance_score}%</em>
                   </span>
                   <h3>
@@ -1006,7 +1071,7 @@ export function App() {
                     </div>
                   ) : null}
                   <a className="source-link" href={selectedFreshSignal.url} target="_blank" rel="noreferrer">
-                    <ExternalLink size={15} />
+                    <PropertyIcon name={selectedFreshSignal ? propertyNameFromSignal(selectedFreshSignal.platform) : "Website"} />
                     Open source signal
                   </a>
                 </div>
@@ -1017,7 +1082,7 @@ export function App() {
                       <div key={signal.id} className={`signal-item ${selectedFreshSignal?.id === signal.id ? "selected" : ""}`}>
                         <button className="signal" onClick={() => setSelectedFreshSignalId(signal.id)}>
                           <span className="signal-top">
-                            <strong>{signal.recommended_action}</strong>
+                            <strong><PropertyIcon name={propertyNameFromSignal(signal.platform)} /> {signal.recommended_action}</strong>
                             <em>{signal.relevance_score}%</em>
                           </span>
                           <span>{signal.title}</span>
@@ -1048,7 +1113,7 @@ export function App() {
                     onClick={() => setSelectedSignalId(signal.id)}
                   >
                     <span className="signal-top">
-                      <strong>{signal.platform}</strong>
+                      <strong><PropertyIcon name={propertyNameFromSignal(signal.platform)} /> {signal.platform}</strong>
                       <em>{signal.relevance}%</em>
                     </span>
                     <span>{signal.title}</span>
@@ -1075,8 +1140,8 @@ export function App() {
                 </div>
 
                 <div className="manual-routes">
-                  {selected.x_url ? <button onClick={() => openChannelRoute(selected, "X", "x_url", selected.x_url)}><X size={16} /> Open X</button> : <span>X missing</span>}
-                  {selected.linkedin_url ? <button onClick={() => openChannelRoute(selected, "LinkedIn", "linkedin_url", selected.linkedin_url)}><Linkedin size={16} /> Open LinkedIn</button> : <span>LinkedIn missing</span>}
+                  {selected.x_url ? <button onClick={() => openChannelRoute(selected, "X", "x_url", selected.x_url)}><PropertyIcon name="X" /> Open X</button> : <span>X missing</span>}
+                  {selected.linkedin_url ? <button onClick={() => openChannelRoute(selected, "LinkedIn", "linkedin_url", selected.linkedin_url)}><PropertyIcon name="LinkedIn" /> Open LinkedIn</button> : <span>LinkedIn missing</span>}
                 </div>
 
                 <div className="capture-grid">
@@ -1134,7 +1199,7 @@ export function App() {
                 )}
                 {selectedFreshSignal && (
                   <a className="source-link" href={selectedFreshSignal.url} target="_blank" rel="noreferrer">
-                    <ExternalLink size={15} />
+                    <PropertyIcon name={selectedFreshSignal ? propertyNameFromSignal(selectedFreshSignal.platform) : "Website"} />
                     Open source signal
                   </a>
                 )}
@@ -1180,7 +1245,7 @@ export function App() {
             </div>
 
             <div className="channels">
-              {platformFields.map(([label, key, Icon]) => {
+              {platformFields.map(([label, key]) => {
                 const value = selected[key];
                 const throttleKey = throttledChannels[key];
                 const policy = throttleKey ? channelPolicies[throttleKey] : null;
@@ -1188,19 +1253,19 @@ export function App() {
                 return value ? (
                   throttleKey ? (
                     <button key={key} className={`channel-link ${policy && !policy.allowed ? "cooling" : ""}`} onClick={() => openChannelRoute(selected, label, key, value)}>
-                      <Icon size={16} />
+                      <PropertyIcon name={label} />
                       <span>{label}</span>
                       {meta && <em>{meta}</em>}
                     </button>
                   ) : (
                     <a key={key} href={value} target="_blank" rel="noreferrer">
-                      <Icon size={16} />
+                      <PropertyIcon name={label} />
                       <span>{label}</span>
                     </a>
                   )
                 ) : (
                   <span key={key} className="disabled-channel">
-                    <Icon size={16} />
+                    <PropertyIcon name={label} />
                     <span>{label}</span>
                   </span>
                 );

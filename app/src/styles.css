@@ -354,6 +354,44 @@ h2 {
 
 
 
+
+.metrics strong,
+.queue-row strong,
+.signal-top strong,
+.platform-pill,
+.channel-link,
+.channels a,
+.disabled-channel,
+.manual-routes button,
+.source-link {
+  align-items: center;
+}
+
+.metrics strong,
+.queue-row strong,
+.signal-top strong,
+.platform-pill {
+  display: inline-flex;
+  gap: 7px;
+}
+
+.metrics .platform-logo,
+.queue-row .platform-logo,
+.signal-top .platform-logo,
+.platform-pill .platform-logo,
+.channels .platform-logo,
+.manual-routes .platform-logo,
+.source-link .platform-logo {
+  flex: 0 0 auto;
+  height: 18px;
+  width: 18px;
+}
+
+.contact-chip .platform-logo {
+  height: 14px;
+  width: 14px;
+}
+
 .platform-logo {
   display: block;
   height: 22px;
@@ -365,9 +403,57 @@ h2 {
 .platform-launch-dock button[aria-label*="Reddit"] .platform-logo,
 .platform-launch-dock button[aria-label*="Facebook"] .platform-logo,
 .platform-launch-dock button[aria-label*="Bluesky"] .platform-logo,
-.platform-launch-dock button[aria-label*="Threads"] .platform-logo {
+.platform-launch-dock button[aria-label*="Threads"] .platform-logo,
+.platform-launch-dock button[aria-label*="Instagram"] .platform-logo,
+.platform-launch-dock button[aria-label*="TikTok"] .platform-logo,
+.platform-launch-dock button[aria-label*="YouTube"] .platform-logo,
+.platform-launch-dock button[aria-label*="Discord"] .platform-logo,
+.platform-launch-dock button[aria-label*="GitHub"] .platform-logo,
+.platform-launch-dock button[aria-label*="Substack"] .platform-logo,
+.platform-launch-dock button[aria-label*="Mastodon"] .platform-logo {
   height: 23px;
   width: 23px;
+}
+
+.post-share-row {
+  align-items: center;
+  background: #fbfaf7;
+  border: 1px solid #d8d4ca;
+  border-radius: 8px;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  padding: 10px;
+}
+
+.post-share-row span {
+  color: #34413d;
+  flex: 1;
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.share-toggle {
+  align-items: center;
+  background: #26383c;
+  border: 0;
+  border-radius: 8px;
+  color: #ffffff;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 900;
+  gap: 7px;
+  min-height: 36px;
+  padding: 7px 10px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.share-toggle[aria-expanded="true"] {
+  background: #2f7b57;
 }
 .post-launch-card,
 .post-launch-notice {
@@ -1120,6 +1206,9 @@ textarea {
   display: grid;
   gap: 8px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-height: 420px;
+  overflow: auto;
+  padding-right: 2px;
 }
 
 .channels a,
