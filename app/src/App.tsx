@@ -1036,12 +1036,19 @@ export function App() {
               );
             })()}
 
-            <div className="mode-tabs" role="group" aria-label="Workflow mode">
-              {(["Signal", "Sensemaking", "Response", "Approve"] as const).map((item) => (
-                <button key={item} className={mode === item ? "active" : ""} onClick={() => setMode(item)}>
-                  {item}
-                </button>
-              ))}
+            <div className="workflow-panel">
+              <div className="workflow-heading">
+                <span className="eyebrow">Judgment Workflow</span>
+                <strong>Understand before acting</strong>
+                <p>Move from signal to meaning, then choose whether to respond, wait, or deepen the relationship.</p>
+              </div>
+              <div className="mode-tabs" role="group" aria-label="Workflow mode">
+                {(["Signal", "Sensemaking", "Response", "Approve"] as const).map((item) => (
+                  <button key={item} className={mode === item ? "active" : ""} onClick={() => setMode(item)}>
+                    {item}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {mode === "Signal" && selectedFreshSignal && (
