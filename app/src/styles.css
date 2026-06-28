@@ -369,13 +369,6 @@ h2 {
   height: 23px;
   width: 23px;
 }
-
-.platform-launch-dock button:first-of-type {
-  background: #26383c;
-  border-color: #26383c;
-  color: #ffffff;
-}
-
 .post-launch-card,
 .post-launch-notice {
   background: #fbfaf7;
